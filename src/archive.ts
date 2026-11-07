@@ -18,6 +18,7 @@ import { INTEGRITY_FIELD, integrityOf } from './integrity.js';
 import { dirOf, linesLinkingTo, normalisePath, rewriteLinks } from './links.js';
 import { configuredSeverity } from './lint.js';
 import type { Scan } from './markdown.js';
+import { claimLabel, lookUp } from './references.js';
 import { encodeLike, fillTemplate, joinLines, labelMatches, templateHoles } from './text.js';
 import type { Finding, Severity } from './types.js';
 
@@ -59,6 +60,12 @@ export interface ArchiveRequest {
   readonly strict?: boolean | undefined;
   /** The corpus's lint findings; errors on the brief refuse the archival. */
   readonly findings?: readonly Finding[] | undefined;
+  /**
+   * The documents the brief names in `raises`, by repository path, `null`
+   * for one that is not a file there. A claim in a document not given is not
+   * checked.
+   */
+  readonly documents?: ReadonlyMap<string, string | null> | undefined;
 }
 
 export type FileOp =
@@ -433,6 +440,32 @@ function donePlan(action: Plan['action'], brief: Brief): Plan {
   };
 }
 
+/**
+ * Each claim the brief raises whose label does not say the work is done
+ * (ADR-0012). A claim that is not there, or not a claim, is the `raises`
+ * rule's finding, which refuses the archival as any error does; the evidence
+ * of a claim that is there is spec-guard's `claims` to check, in CI.
+ */
+function unraisedClaims(brief: Brief, config: Config, documents: ReadonlyMap<string, string | null> | undefined): Finding[] {
+  if (documents === undefined) return [];
+  const meanings = config.claims.labels;
+  const labels = Object.keys(meanings);
+  const done = labels.filter((label) => meanings[label] === 'done');
+  const out: Finding[] = [];
+  for (const written of brief.raises) {
+    const named = lookUp(written, documents);
+    if (named === null || named.kind !== 'read') continue;
+    const label = claimLabel(named.text, named.reference.name, labels);
+    if (label === null || meanings[label] === 'done') continue;
+    const hint =
+      done.length === 0
+        ? 'no label in "claims.labels" says "done": add the one a finished claim is written with'
+        : `raise it to ${done.map((word) => `"${word}"`).join(' or ')} once its evidence is in, or drop it from raises if this round does not raise it`;
+    out.push(problem(brief, 'claim-not-raised', 'error', lineOf(brief, 'raises'), `raises "${written}", which is still "${label}"`, hint));
+  }
+  return out;
+}
+
 export function planArchive(corpus: Corpus, brief: Brief, request: ArchiveRequest): Plan {
   if (brief.phase === 'archived') return donePlan('archive', brief);
   const { config } = corpus;
@@ -484,6 +517,7 @@ export function planArchive(corpus: Corpus, brief: Brief, request: ArchiveReques
       );
     }
   }
+  blocking.push(...unraisedClaims(brief, config, request.documents));
   const bookkeeping = (path: string): boolean => isBriefPath(path, config);
   if (request.dirty !== undefined && request.allowDirty !== true) {
     const outside = request.dirty.filter((path) => !bookkeeping(path));

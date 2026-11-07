@@ -49,6 +49,8 @@ describe('the rule catalogue', () => {
       'dependency-cycle': 'error',
       'wave-order': 'error',
       'deferral-trigger': 'error',
+      raises: 'error',
+      awaits: 'error',
       glob: 'error',
       'scope-contradiction': 'error',
       'glob-matches-nothing': 'note',

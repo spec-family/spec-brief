@@ -69,6 +69,29 @@ Work put off for later is a brief too, with `status: deferred` and a `trigger` n
 - `protectedFiles` is what it is not empowered to change, and archival refuses a round that changed it.
 - Protection wins: what a round may write is `affectedFiles` less `protectedFiles`, so "all of `src/` but the schema" is `affectedFiles: [src/**]` with `protectedFiles: [src/db/schema.ts]`.
 
+### Claims a round raises, rows it waits on
+
+A brief may name the claims its round raises and the register rows it waits on, each as `path#name`, the path from the repository root:
+
+```markdown
+---
+status: active
+raises: [spec/refunds.md#refund-limit]
+awaits: [docs/decisions.md#refund-currency]
+---
+```
+
+- **`raises`** names a claim: a list item in a specification that opens with a label as code, such as `` `Specified` `` or `` `Implemented` ``, with `<!-- @spec-item id="refund-limit" -->` above it - the claim spec-guard's `claims` holds to its evidence and spec-graph reads. `lint` fails one that is not there, and `archive` refuses the round while a claim it raises carries a label that says the work is still open (`claim-not-raised`). Whether the evidence holds is spec-guard's to say, in the same CI run: no tool calls another.
+- **`awaits`** names a register row by its key: the row of a table with a key column, such as `ID` or `Key`, and a status column after it. `lint` fails an active brief while the row is not settled, and warns of it on a draft or on deferred work, whose round has not started.
+- What the words mean is configuration: `claims.labels` gives each label `"done"` or `"open"`, and `registers.settled` lists the statuses that settle a row. A brief that names neither field is read as before.
+
+```json
+{
+  "claims": { "labels": { "Implemented": "done", "Specified": "open" } },
+  "registers": { "settled": ["decided", "done"] }
+}
+```
+
 ### Scope patterns
 
 Scopes are globs in spec-core's `path` dialect, the one every spec-\* tool reads: `*`, `?`, `[a-z]` and `{a,b}` within a name, `**` for any number of directories, compared case-sensitively on every host. The rules:
@@ -384,6 +407,8 @@ spec-brief: --help is given beside --version, and one of the two answers would g
 | `archiving.rewriteLinks` | `true` | Rewrite relative links when a brief moves: its own, and the ones other live briefs hold to it. Off, neither is edited, and the links other briefs are left holding are reported as `stale-link`. |
 | `archiving.freeze` | `true` | Write an integrity hash, so a later edit is caught. |
 | `archiving.base` | `null` | Branch the diff is measured from, such as `"main"`. |
+| `claims.labels` | `{}` | Each label a claim is written with, and whether it says the work is `"done"` or `"open"`, for the claims a brief [raises](#claims-a-round-raises-rows-it-waits-on). |
+| `registers.settled` | `[]` | The statuses that settle a register row a brief [awaits](#claims-a-round-raises-rows-it-waits-on), compared without case by the word a status opens with. |
 | `rules` | `{}` | Severity per rule: `off`, `note`, `warning` or `error`. |
 | `plugins` | `[]` | Modules that contribute rules: a path or package, or `{ module, options }`. |
 
@@ -445,6 +470,8 @@ How a heading fills a section, and what counts as a heading, a task or a link, i
 | `dependency-cycle` | error | Live briefs that depend on each other in a cycle, reported once, as a path. |
 | `wave-order` | error | A live dependency that does not run in an earlier wave. |
 | `deferral-trigger` | error | A deferred brief with no `trigger`, or one that is only a date or a time - `2026-10`, `Q3`, `next month`, `October` - or a placeholder, rather than an event such as "when the second tenant signs". The words for a time are English. |
+| `raises` | error | A claim in `raises` that is not `path#name`, names a document that is not a file, or names no claim there: a list item opening with a configured label, under `<!-- @spec-item id="..." -->`. Claims raised with no labels configured. A warning in a draft. |
+| `awaits` | error | A row in `awaits` that is not `path#key`, or that no register in the document keys. A row whose status is not one of `registers.settled`, a warning in a draft or deferred work. Rows awaited with no settled statuses configured. |
 | `glob` | error | A scope pattern spec-brief cannot read. |
 | `scope-contradiction` | error | Patterns in `affectedFiles` that `protectedFiles` cover entirely, so nothing of them is writable - one finding per brief, naming each. A pattern the search cannot decide is a warning. |
 | `glob-matches-nothing` | note | A scope pattern that matches no file git sees, tracked or untracked - expected when the round creates it. |
@@ -459,7 +486,7 @@ How a heading fills a section, and what counts as a heading, a task or a link, i
 | `stale-link` | warning | Links in live briefs left pointing where a brief used to be, when `archiving.rewriteLinks` is off (`archive`, `unarchive`). |
 <!-- rules:end -->
 
-`archive` refuses with its own reasons - `open-task`, `archive-draft`, `archive-deferred`, `dependency-open`, `dirty-tree`, `protected-file`, `out-of-scope`, `archive-exists` - and says `waived` and `waiver-ignored` of what [plugins](#waiving-a-refusal) lift; none of these are lint rules: they are about whether this round is done, not whether the brief is well written. The rules marked `archive` above are raised by archival too, and configuration sets their severity like any other.
+`archive` refuses with its own reasons - `open-task`, `archive-draft`, `archive-deferred`, `dependency-open`, `claim-not-raised`, `dirty-tree`, `protected-file`, `out-of-scope`, `archive-exists` - and says `waived` and `waiver-ignored` of what [plugins](#waiving-a-refusal) lift; none of these are lint rules: they are about whether this round is done, not whether the brief is well written. The rules marked `archive` above are raised by archival too, and configuration sets their severity like any other.
 
 ## In CI
 

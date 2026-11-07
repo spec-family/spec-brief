@@ -25,6 +25,8 @@ export const BUILT_IN_FIELDS: readonly string[] = [
   'protectedFiles',
   'trigger',
   'integrity',
+  'raises',
+  'awaits',
 ];
 
 export interface FieldProblem {
@@ -64,6 +66,10 @@ export interface Brief {
   /** For deferred work: the observable event that brings it back. */
   readonly trigger: string | null;
   readonly integrity: string | null;
+  /** The claims the round raises, each `path#name` (ADR-0012). */
+  readonly raises: readonly string[];
+  /** The register rows that must be settled before the round starts, each `path#key` (ADR-0012). */
+  readonly awaits: readonly string[];
   /** The frozen banner's lines, markers included, end exclusive. */
   readonly banner: { readonly start: number; readonly end: number } | null;
   readonly problems: readonly FieldProblem[];
@@ -183,6 +189,8 @@ export function parseBrief(file: string, text: string, config: Config, phase: Ph
     protectedFiles: list('protectedFiles'),
     trigger: text1('trigger'),
     integrity: text1('integrity'),
+    raises: list('raises'),
+    awaits: list('awaits'),
     banner,
     problems,
   };

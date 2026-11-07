@@ -44,6 +44,7 @@ files -> brief.ts -> corpus.ts -> rules.ts / collisions.ts / schedule.ts / archi
 | `collisions.ts` | The collision matrix. |
 | `schedule.ts` | Waves by precedence-constrained greedy colouring, the reason for each, and the writes `--write` makes. |
 | `trigger.ts` | Whether a deferral's trigger names an event or only a time. |
+| `references.ts` | The claims a brief raises and the register rows it awaits, read as `path#name` from the documents named, by spec-core's readings. |
 | `integrity.ts` | The freeze hash. |
 | `archive.ts` | Planning archival and its reverse. |
 | `apply.ts` | Executing a plan as a transaction. |

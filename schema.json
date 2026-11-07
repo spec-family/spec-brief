@@ -294,6 +294,37 @@
       },
       "additionalProperties": false
     },
+    "claims": {
+      "type": "object",
+      "properties": {
+        "labels": {
+          "description": "Each label a claim is written with, as spec-guard and spec-graph read them, and whether it says the work is \"done\" or still \"open\": a brief archives once each claim it raises carries a \"done\" label.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "enum": [
+              "done",
+              "open"
+            ]
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "registers": {
+      "type": "object",
+      "properties": {
+        "settled": {
+          "description": "The register statuses that settle a row, such as \"decided\" and \"done\": a live brief waits on no row it awaits whose status is another.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "rules": {
       "description": "Severity per rule id.",
       "type": "object",

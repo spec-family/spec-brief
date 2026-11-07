@@ -34,6 +34,7 @@ import { matchGlob, parseGlob } from './glob.js';
 import { normalisePath } from './links.js';
 import { lint, type Plugin } from './lint.js';
 import { asWaivers, loadPlugins } from './plugins.js';
+import { documentsNamed } from './references.js';
 import { fileNameFor, nextId, renderNewBrief } from './scaffold.js';
 import { planWaves, type Schedule, schedule, scheduleFindings, type ScheduleOptions } from './schedule.js';
 import type { Finding, Phase } from './types.js';
@@ -352,7 +353,29 @@ export class BriefEngine {
 
   async lint(references: readonly string[] = []): Promise<Finding[]> {
     const only = references.length === 0 ? undefined : references.map((r) => this.find(r));
-    return lint(this.corpus, { plugins: await this.loadedPlugins(), repoFiles: await this.repoFiles(), ...(only ? { only } : {}) });
+    return this.lintWith(await this.documents(), only);
+  }
+
+  private async lintWith(documents: ReadonlyMap<string, string | null>, only?: readonly Brief[]): Promise<Finding[]> {
+    return lint(this.corpus, { plugins: await this.loadedPlugins(), repoFiles: await this.repoFiles(), documents, ...(only ? { only } : {}) });
+  }
+
+  /**
+   * Every document the live briefs name in `raises` and `awaits`, read:
+   * `null` for one that is not a file, a directory as much as nothing at all
+   * (ADR-0012).
+   */
+  async documents(): Promise<Map<string, string | null>> {
+    const out = new Map<string, string | null>();
+    for (const path of documentsNamed(this.corpus.briefs)) {
+      try {
+        out.set(path, await this.fs.read(path));
+      } catch (error) {
+        if (!(error instanceof NotAFileError)) throw error;
+        out.set(path, null);
+      }
+    }
+    return out;
   }
 
   async collisions(options: CollisionOptions = {}): Promise<{ report: CollisionReport; findings: Finding[] }> {
@@ -420,7 +443,8 @@ export class BriefEngine {
     }
     const git = options.noGit === true ? null : this.git;
     const base = options.base ?? this.config.archiving.base ?? undefined;
-    const findings = await this.lint();
+    const documents = await this.documents();
+    const findings = await this.lintWith(documents);
 
     let commit: CommitInfo | undefined;
     let changes: FileChange[] | undefined;
@@ -471,6 +495,7 @@ export class BriefEngine {
       allowDirty: options.allowDirty,
       strict: options.strict,
       findings,
+      documents,
     });
     return this.waive(plan, base ?? null, commit?.sha ?? null, options.strict === true);
   }
