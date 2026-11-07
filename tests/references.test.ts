@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { planArchive } from '../src/archive.js';
-import { ConfigError, resolveConfig } from '../src/config.js';
+import { type Config, ConfigError, resolveConfig } from '../src/config.js';
 import { findBriefs } from '../src/corpus.js';
 import { lint } from '../src/lint.js';
 import { claimLabel, documentsNamed, readReference, rowStatus, statusWord } from '../src/references.js';
@@ -13,10 +13,16 @@ import { brief, corpusOf, goodBrief } from './helpers.js';
  * `path#name` and read where it is written (ADR-0012).
  */
 
-const CONFIG = resolveConfig({
-  claims: { labels: { Implemented: 'done', Shipped: 'done', Specified: 'open' } },
-  registers: { settled: ['Decided', 'done'] },
-});
+/**
+ * Resolved inside each test that asks: a configuration resolved as the file
+ * loads takes the file with it under a mutant that refuses it, and a file
+ * that does not load fails no test a sweep counts.
+ */
+const CONFIG = (): Config =>
+  resolveConfig({
+    claims: { labels: { Implemented: 'done', Shipped: 'done', Specified: 'open' } },
+    registers: { settled: ['Decided', 'done'] },
+  });
 
 const SPEC = [
   '# Refunds',
@@ -46,7 +52,7 @@ const REGISTER = [
 const DOCUMENTS: Readonly<Record<string, string | null>> = { 'spec/refunds.md': SPEC, 'docs/decisions.md': REGISTER, 'spec/gone.md': null };
 
 /** The findings of the two rules for one brief with these fields. */
-async function findings(front: Record<string, string>, documents = DOCUMENTS, config = CONFIG): Promise<Finding[]> {
+async function findings(front: Record<string, string>, documents = DOCUMENTS, config = CONFIG()): Promise<Finding[]> {
   const corpus = corpusOf({ 'briefs/001_x.md': goodBrief(front) }, config);
   const found = await lint(corpus, { documents: new Map(Object.entries(documents)) });
   return found.filter((finding) => finding.rule === 'raises' || finding.rule === 'awaits');
@@ -151,6 +157,11 @@ describe('the claims a brief raises', () => {
     ]);
   });
 
+  it('is a field spec-brief knows, as awaits is: a brief with both, each holding, has no finding', async () => {
+    const corpus = corpusOf({ 'briefs/001_x.md': goodBrief({ raises: '[spec/refunds.md#refund-limit]', awaits: '[docs/decisions.md#refund-rounding]' }) }, CONFIG());
+    expect((await lint(corpus, { documents: new Map(Object.entries(DOCUMENTS)) })).map((f) => [f.rule, f.message])).toEqual([]);
+  });
+
   it('says nothing of a document it was not given', async () => {
     expect(await findings({ raises: '[spec/unread.md#x]' })).toEqual([]);
     expect(await findings({ raises: '[spec/refunds.md#refund-other]' }, {})).toEqual([]);
@@ -172,7 +183,7 @@ describe('the claims a brief raises', () => {
   });
 
   it('is not asked of an archived brief, whose fields are a record', async () => {
-    const corpus = corpusOf({ 'briefs/archive/001_x.md': goodBrief({ status: 'archived', raises: '[spec/refunds.md#refund-other]', awaits: '[docs/decisions.md#refund-currency]' }) }, CONFIG);
+    const corpus = corpusOf({ 'briefs/archive/001_x.md': goodBrief({ status: 'archived', raises: '[spec/refunds.md#refund-other]', awaits: '[docs/decisions.md#refund-currency]' }) }, CONFIG());
     const found = await lint(corpus, { documents: new Map(Object.entries(DOCUMENTS)) });
     expect(found.filter((f) => f.rule === 'raises' || f.rule === 'awaits')).toEqual([]);
   });
@@ -252,11 +263,11 @@ describe('the configuration of what the words mean', () => {
 
 describe('archiving a round that raises claims', () => {
   /** `null` for a plan given no documents: a parameter given `undefined` takes its default. */
-  const plan = (front: Record<string, string>, documents: Readonly<Record<string, string | null>> | null = DOCUMENTS, config = CONFIG) => {
+  const plan = (front: Record<string, string>, documents: Readonly<Record<string, string | null>> | null = DOCUMENTS, config = CONFIG()) => {
     const corpus = corpusOf({ 'briefs/001_x.md': goodBrief(front) }, config);
     return planArchive(corpus, findBriefs(corpus, '001')[0]!, { date: '2026-11-08', ...(documents === null ? {} : { documents: new Map(Object.entries(documents)) }) });
   };
-  const refused = (front: Record<string, string>, documents: Readonly<Record<string, string | null>> | null = DOCUMENTS, config = CONFIG) =>
+  const refused = (front: Record<string, string>, documents: Readonly<Record<string, string | null>> | null = DOCUMENTS, config = CONFIG()) =>
     plan(front, documents, config).blocking.filter((f) => f.rule === 'claim-not-raised');
 
   it('refuses it while a claim it raises carries a label that says the work is open', () => {

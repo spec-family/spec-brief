@@ -18,7 +18,7 @@ import { INTEGRITY_FIELD, integrityOf } from './integrity.js';
 import { dirOf, linesLinkingTo, normalisePath, rewriteLinks } from './links.js';
 import { configuredSeverity } from './lint.js';
 import type { Scan } from './markdown.js';
-import { claimLabel, readReference } from './references.js';
+import { claimLabel, lookUp } from './references.js';
 import { encodeLike, fillTemplate, joinLines, labelMatches, templateHoles } from './text.js';
 import type { Finding, Severity } from './types.js';
 
@@ -447,16 +447,15 @@ function donePlan(action: Plan['action'], brief: Brief): Plan {
  * of a claim that is there is spec-guard's `claims` to check, in CI.
  */
 function unraisedClaims(brief: Brief, config: Config, documents: ReadonlyMap<string, string | null> | undefined): Finding[] {
+  if (documents === undefined) return [];
   const meanings = config.claims.labels;
   const labels = Object.keys(meanings);
   const done = labels.filter((label) => meanings[label] === 'done');
   const out: Finding[] = [];
   for (const written of brief.raises) {
-    const reference = readReference(written);
-    if (reference === null || reference === 'outside') continue;
-    const text = documents?.get(reference.path);
-    if (text === undefined || text === null) continue;
-    const label = claimLabel(text, reference.name, labels);
+    const named = lookUp(written, documents);
+    if (named.kind !== 'read') continue;
+    const label = claimLabel(named.text, named.reference.name, labels);
     if (label === null || meanings[label] === 'done') continue;
     const hint =
       done.length === 0

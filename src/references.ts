@@ -45,6 +45,28 @@ export function readReference(written: string): Reference | 'outside' | null {
   return path === '' || name === '' ? null : { path, name };
 }
 
+/**
+ * What an entry names, against the documents a run read: `unwritten` where
+ * it is not `path#name`, `outside` where it leaves the repository,
+ * `unread` where its document was not read, `missing` where that is no
+ * file, and `read` with the document's text.
+ */
+export type Named =
+  | { readonly kind: 'unwritten' }
+  | { readonly kind: 'outside' }
+  | { readonly kind: 'unread' }
+  | { readonly kind: 'missing'; readonly reference: Reference }
+  | { readonly kind: 'read'; readonly reference: Reference; readonly text: string };
+
+export function lookUp(written: string, documents: ReadonlyMap<string, string | null>): Named {
+  const reference = readReference(written);
+  if (reference === null) return { kind: 'unwritten' };
+  if (reference === 'outside') return { kind: 'outside' };
+  const text = documents.get(reference.path);
+  if (text === undefined) return { kind: 'unread' };
+  return text === null ? { kind: 'missing', reference } : { kind: 'read', reference, text };
+}
+
 /** Every document the live briefs name, each once, in the order first named. */
 export function documentsNamed(briefs: readonly Brief[]): string[] {
   const paths = new Set<string>();

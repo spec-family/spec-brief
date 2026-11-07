@@ -18,7 +18,7 @@ import { type Glob, hasExtension, held, isGlobSyntax, matchesAny, parseGlob, rea
 import { hasContent, type Section } from './markdown.js';
 import { closest } from './schema.js';
 import { contradictions, patternsOf, scopeOf, type ScopePattern } from './scope.js';
-import { claimLabel, readReference, type Reference, type ReferenceField, rowStatus, statusWord } from './references.js';
+import { claimLabel, lookUp, type Reference, type ReferenceField, rowStatus, statusWord } from './references.js';
 import { inWords, labelMatches } from './text.js';
 import { namesAnEvent } from './trigger.js';
 import type { Severity, SeveritySetting } from './types.js';
@@ -145,22 +145,16 @@ function documentsOf(brief: Brief, field: ReferenceField, documents: ReadonlyMap
   const line = at(lineOfField(brief, field));
   const out: { written: string; reference: Reference; text: string }[] = [];
   for (const written of brief[field]) {
-    const reference = readReference(written);
-    if (reference === null) {
+    const named = lookUp(written, documents);
+    if (named.kind === 'unwritten') {
       found.push({ line, message: `"${written}" in ${field} is not a document and a name`, subject: written, hint: 'write it "path#name", the path from the repository root, such as "spec/refunds.md#refund-limit"' });
-      continue;
-    }
-    if (reference === 'outside') {
+    } else if (named.kind === 'outside') {
       found.push({ line, message: `"${written}" in ${field} names a document outside the repository`, subject: written, hint: 'name a document by its path from the repository root' });
-      continue;
+    } else if (named.kind === 'missing') {
+      found.push({ line, message: `"${written}" in ${field} names ${named.reference.path}, which is not a file here`, subject: written, severity: leniency(brief), hint: 'check the path, written from the repository root' });
+    } else if (named.kind === 'read') {
+      out.push({ written, reference: named.reference, text: named.text });
     }
-    const text = documents.get(reference.path);
-    if (text === undefined) continue;
-    if (text === null) {
-      found.push({ line, message: `"${written}" in ${field} names ${reference.path}, which is not a file here`, subject: written, severity: leniency(brief), hint: 'check the path, written from the repository root' });
-      continue;
-    }
-    out.push({ written, reference, text });
   }
   return out;
 }
