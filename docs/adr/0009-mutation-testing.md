@@ -245,7 +245,11 @@ sweep. For 0.12.0, the first release as `@spec-family/spec-brief`, the
 sweep of b6b674c (run 40317429095) read 99.29% over 7,585 and, for the
 core, 99.33% over 5,362, as 0.11.0's did: the move changed strings and
 made no mutant, and mutant for mutant against 5270f6d's no survivor is
-new and none is gone.
+new and none is gone. For 0.13.0 the sweep of 66c1010 (run 42415949108)
+read 99.31% over 7,872 and, for the core, 99.36% over 5,639. The claims a
+brief raises and the rows it awaits made 287 mutants and left none: mutant
+for mutant against the sweep of 8887b75 (run 41432023621), no survivor is
+new and none is gone, in either sweep.
 
 Reading them was a review again, and found what no test had:
 
