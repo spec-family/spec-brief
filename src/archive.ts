@@ -454,7 +454,7 @@ function unraisedClaims(brief: Brief, config: Config, documents: ReadonlyMap<str
   const out: Finding[] = [];
   for (const written of brief.raises) {
     const named = lookUp(written, documents);
-    if (named.kind !== 'read') continue;
+    if (named === null || named.kind !== 'read') continue;
     const label = claimLabel(named.text, named.reference.name, labels);
     if (label === null || meanings[label] === 'done') continue;
     const hint =

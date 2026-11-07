@@ -48,22 +48,22 @@ export function readReference(written: string): Reference | 'outside' | null {
 /**
  * What an entry names, against the documents a run read: `unwritten` where
  * it is not `path#name`, `outside` where it leaves the repository,
- * `unread` where its document was not read, `missing` where that is no
- * file, and `read` with the document's text.
+ * `missing` where its document is no file, and `read` with the document's
+ * text. `lookUp` answers `null` where the document was not read, of which
+ * nothing can be said.
  */
 export type Named =
   | { readonly kind: 'unwritten' }
   | { readonly kind: 'outside' }
-  | { readonly kind: 'unread' }
   | { readonly kind: 'missing'; readonly reference: Reference }
   | { readonly kind: 'read'; readonly reference: Reference; readonly text: string };
 
-export function lookUp(written: string, documents: ReadonlyMap<string, string | null>): Named {
+export function lookUp(written: string, documents: ReadonlyMap<string, string | null>): Named | null {
   const reference = readReference(written);
   if (reference === null) return { kind: 'unwritten' };
   if (reference === 'outside') return { kind: 'outside' };
   const text = documents.get(reference.path);
-  if (text === undefined) return { kind: 'unread' };
+  if (text === undefined) return null;
   return text === null ? { kind: 'missing', reference } : { kind: 'read', reference, text };
 }
 

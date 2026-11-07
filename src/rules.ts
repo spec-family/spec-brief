@@ -146,13 +146,14 @@ function documentsOf(brief: Brief, field: ReferenceField, documents: ReadonlyMap
   const out: { written: string; reference: Reference; text: string }[] = [];
   for (const written of brief[field]) {
     const named = lookUp(written, documents);
+    if (named === null) continue;
     if (named.kind === 'unwritten') {
       found.push({ line, message: `"${written}" in ${field} is not a document and a name`, subject: written, hint: 'write it "path#name", the path from the repository root, such as "spec/refunds.md#refund-limit"' });
     } else if (named.kind === 'outside') {
       found.push({ line, message: `"${written}" in ${field} names a document outside the repository`, subject: written, hint: 'name a document by its path from the repository root' });
     } else if (named.kind === 'missing') {
       found.push({ line, message: `"${written}" in ${field} names ${named.reference.path}, which is not a file here`, subject: written, severity: leniency(brief), hint: 'check the path, written from the repository root' });
-    } else if (named.kind === 'read') {
+    } else {
       out.push({ written, reference: named.reference, text: named.text });
     }
   }
