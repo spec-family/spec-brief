@@ -49,6 +49,12 @@ export interface LintOptions {
   readonly repoFiles?: readonly string[] | null;
   /** Limit the findings to these briefs. The whole corpus is still read. */
   readonly only?: readonly Brief[];
+  /**
+   * The documents the live briefs name in `raises` and `awaits`, by
+   * repository path, `null` for one that is not a file there. A document not
+   * given is one nothing was read of, and the rules say nothing of it.
+   */
+  readonly documents?: ReadonlyMap<string, string | null>;
 }
 
 const RANK: Readonly<Record<Severity, number>> = { note: 0, warning: 1, error: 2 };
@@ -119,6 +125,7 @@ export async function lint(corpus: Corpus, options: LintOptions = {}): Promise<F
         corpus,
         config: corpus.config,
         repoFiles: options.repoFiles ?? null,
+        documents: options.documents ?? new Map(),
         shared,
         options: ruleOptions,
       });

@@ -11,6 +11,31 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
+## Unreleased
+
+### Added
+
+- **A brief names the claims its round raises and the register rows it
+  waits on**, in two front-matter fields, `raises` and `awaits`, each a
+  list of `path#name` from the repository root. A claim is the list item a
+  `<!-- @spec-item id="..." -->` names, opening with a label
+  `claims.labels` configures as `"done"` or `"open"`; a register row is
+  the row of a table its key names, settled by a status
+  `registers.settled` lists. Two rules hold a live brief to them, error by
+  default: `raises`, for a claim that is not there, and `awaits`, for a
+  row that is not there or not settled, a warning in a draft or deferred
+  work. `archive` refuses a round while a claim it raises carries a label
+  that says the work is open (`claim-not-raised`). The evidence of a claim
+  is left to spec-guard's `claims`, in the same CI run
+  ([ADR-0012](https://github.com/spec-family/spec-brief/blob/main/docs/adr/0012-a-brief-names-the-claims-it-raises.md)). 26 lint rules and 5 collision rules. A brief that
+  names neither field, and a configuration that sets neither key, is read
+  as before.
+
+### Changed
+
+- **The vendored spec-core is at ba72415**, which adds the item a
+  `@spec-item` names and a register's rows to its `markdown` module.
+
 ## 0.12.0
 
 The first release as `@spec-family/spec-brief`, from

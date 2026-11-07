@@ -18,6 +18,7 @@ import { dirname, join } from 'node:path';
 import { parseGlob } from './glob.js';
 import { normalisePath } from './links.js';
 import { literal } from './literal.js';
+import { statusWord } from './references.js';
 import { type Schema, toJsonSchema, validate } from './schema.js';
 import { inWords, templateHoles } from './text.js';
 import type { SeveritySetting } from './types.js';
@@ -81,9 +82,20 @@ export interface Config {
     readonly freeze: boolean;
     readonly base: string | null;
   };
+  /** The labels claims are written with, and whether each says the work is done (ADR-0012). */
+  readonly claims: {
+    readonly labels: Readonly<Record<string, ClaimMeaning>>;
+  };
+  /** The register statuses that settle a row a brief awaits, compared without case (ADR-0012). */
+  readonly registers: {
+    readonly settled: readonly string[];
+  };
   readonly rules: Readonly<Record<string, SeveritySetting>>;
   readonly plugins: readonly PluginReference[];
 }
+
+/** What a claim's label says of its work. */
+export type ClaimMeaning = 'done' | 'open';
 
 export const CONFIG_FILES: readonly string[] = ['.spec-brief.json', 'spec-brief.json'];
 
@@ -196,6 +208,22 @@ export const CONFIG_SCHEMA: Schema = {
         base: { type: 'string', nullable: true, description: 'Branch the diff is measured from, such as "main".' },
       },
     },
+    claims: {
+      type: 'object',
+      properties: {
+        labels: {
+          type: 'map',
+          values: { type: 'string', enum: ['done', 'open'] },
+          description: 'Each label a claim is written with, as spec-guard and spec-graph read them, and whether it says the work is "done" or still "open": a brief archives once each claim it raises carries a "done" label.',
+        },
+      },
+    },
+    registers: {
+      type: 'object',
+      properties: {
+        settled: { ...STRINGS, description: 'The register statuses that settle a row, such as "decided" and "done": a live brief waits on no row it awaits whose status is another.' },
+      },
+    },
     rules: { type: 'map', values: SEVERITY, description: 'Severity per rule id.' },
     plugins: {
       type: 'array',
@@ -276,6 +304,8 @@ export const DEFAULT_CONFIG: Config = {
     freeze: true,
     base: null,
   },
+  claims: { labels: {} },
+  registers: { settled: [] },
   rules: {},
   plugins: [],
 };
@@ -379,6 +409,8 @@ export function resolveConfig(raw: unknown, file = 'configuration'): Config {
     placeholders: r['placeholders'] ?? d.placeholders,
     fields: r['fields'] ?? d.fields,
     archiving,
+    claims: merged('claims', d.claims),
+    registers: merged('registers', d.registers),
     rules: { ...d.rules, ...(r['rules'] ?? {}) },
     plugins: (r['plugins'] ?? []).map(pluginFrom),
   };
@@ -443,6 +475,14 @@ function checkConfig(config: Config): string[] {
       if (!BANNER_PLACEHOLDERS.includes(hole)) {
         problems.push(`"archiving.banner" uses {${hole}}; the placeholders are ${BANNER_PLACEHOLDERS.map((p) => `{${p}}`).join(', ')}`);
       }
+    }
+  }
+  // A row's status is read by the word it opens with, so a status of two
+  // words, one with a colon in it or one with a space around it would settle
+  // no row.
+  for (const status of config.registers.settled) {
+    if (statusWord(status) !== status.toLowerCase()) {
+      problems.push(`"registers.settled" holds "${status}", which is not one word: a row's status is read by the word it opens with`);
     }
   }
   return problems;

@@ -622,6 +622,8 @@ describe('configuration', () => {
         freeze: true,
         base: null,
       },
+      claims: { labels: {} },
+      registers: { settled: [] },
       rules: {},
       plugins: [],
     });

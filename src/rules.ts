@@ -18,6 +18,7 @@ import { type Glob, hasExtension, held, isGlobSyntax, matchesAny, parseGlob, rea
 import { hasContent, type Section } from './markdown.js';
 import { closest } from './schema.js';
 import { contradictions, patternsOf, scopeOf, type ScopePattern } from './scope.js';
+import { claimLabel, readReference, type Reference, type ReferenceField, rowStatus, statusWord } from './references.js';
 import { inWords, labelMatches } from './text.js';
 import { namesAnEvent } from './trigger.js';
 import type { Severity, SeveritySetting } from './types.js';
@@ -39,6 +40,11 @@ export interface RuleContext {
   readonly config: Config;
   /** The files git sees, or every file without git; `null` when unknown. A rule that needs them stays quiet without them. */
   readonly repoFiles: readonly string[] | null;
+  /**
+   * The documents the live briefs name, by repository path, `null` for one
+   * that is not a file there; a rule says nothing of one it was not given.
+   */
+  readonly documents: ReadonlyMap<string, string | null>;
   /** Analyses computed once per run and shared by every brief. */
   readonly shared: SharedAnalysis;
   /** A plugin's options from the configuration. */
@@ -125,6 +131,39 @@ function live(check: (context: RuleContext) => RuleResult[]): (context: RuleCont
 const SCOPE_FIELDS = literal(['affectedFiles', 'protectedFiles']);
 
 const quoted = (items: readonly string[]): string => inWords(items.map((item) => `"${item}"`));
+
+/** Alternatives, each quoted: `"decided" or "done"`. */
+const either = (items: readonly string[]): string => items.map((item) => `"${item}"`).join(' or ');
+
+/**
+ * The entries of `raises` or `awaits` that name a document read, each with
+ * its text. An entry that is not `path#name`, that leaves the repository or
+ * that names no file is reported into `found` instead; one whose document
+ * was not read is passed over, since nothing can be said of it.
+ */
+function documentsOf(brief: Brief, field: ReferenceField, documents: ReadonlyMap<string, string | null>, found: RuleResult[]): { written: string; reference: Reference; text: string }[] {
+  const line = at(lineOfField(brief, field));
+  const out: { written: string; reference: Reference; text: string }[] = [];
+  for (const written of brief[field]) {
+    const reference = readReference(written);
+    if (reference === null) {
+      found.push({ line, message: `"${written}" in ${field} is not a document and a name`, subject: written, hint: 'write it "path#name", the path from the repository root, such as "spec/refunds.md#refund-limit"' });
+      continue;
+    }
+    if (reference === 'outside') {
+      found.push({ line, message: `"${written}" in ${field} names a document outside the repository`, subject: written, hint: 'name a document by its path from the repository root' });
+      continue;
+    }
+    const text = documents.get(reference.path);
+    if (text === undefined) continue;
+    if (text === null) {
+      found.push({ line, message: `"${written}" in ${field} names ${reference.path}, which is not a file here`, subject: written, severity: leniency(brief), hint: 'check the path, written from the repository root' });
+      continue;
+    }
+    out.push({ written, reference, text });
+  }
+  return out;
+}
 
 /**
  * The paths a pattern names with no glob syntax that the tree does not hold
@@ -570,6 +609,83 @@ export const RULES: readonly Rule[] = [
         return [{ line, message: `the trigger "${trigger}" is a date or a time, not an event`, hint: `${hint}; a date arrives whether or not the reason for the work has` }];
       }
       return [];
+    }),
+  },
+  {
+    id: 'raises',
+    severity: 'error',
+    description: 'Each claim a live brief raises is a claim in a document that exists, named by its @spec-item id.',
+    check: live(({ brief, config, documents }) => {
+      if (brief.raises.length === 0) return [];
+      const line = at(lineOfField(brief, 'raises'));
+      const labels = Object.keys(config.claims.labels);
+      if (labels.length === 0) {
+        return [
+          {
+            line,
+            message: 'raises claims, and no claim labels are configured',
+            hint: 'set "claims.labels" to the labels claims are written with, each "done" or "open", such as { "Implemented": "done", "Specified": "open" }',
+          },
+        ];
+      }
+      const found: RuleResult[] = [];
+      for (const { written, reference, text } of documentsOf(brief, 'raises', documents, found)) {
+        if (claimLabel(text, reference.name, labels) !== null) continue;
+        found.push({
+          line,
+          message: `raises "${written}", and ${reference.path} has no claim named "${reference.name}"`,
+          subject: written,
+          severity: leniency(brief),
+          hint: `write <!-- @spec-item id="${reference.name}" --> above the claim, a list item that opens with ${either(labels)} as code`,
+        });
+      }
+      return found;
+    }),
+  },
+  {
+    id: 'awaits',
+    severity: 'error',
+    description: 'Each register row a live brief awaits exists, and is settled once the round has started.',
+    check: live(({ brief, config, documents }) => {
+      if (brief.awaits.length === 0) return [];
+      const line = at(lineOfField(brief, 'awaits'));
+      const settled = config.registers.settled;
+      if (settled.length === 0) {
+        return [
+          {
+            line,
+            message: 'awaits register rows, and no settled statuses are configured',
+            hint: 'set "registers.settled" to the statuses that settle a row, such as ["decided", "done"]',
+          },
+        ];
+      }
+      const words = settled.map((status) => status.toLowerCase());
+      // A round that has not started may still wait: a draft, or deferred work.
+      const waiting = brief.status === 'draft' || brief.status === 'deferred' ? 'warning' : undefined;
+      const found: RuleResult[] = [];
+      for (const { written, reference, text } of documentsOf(brief, 'awaits', documents, found)) {
+        const status = rowStatus(text, reference.name);
+        if (status === null) {
+          found.push({
+            line,
+            message: `awaits "${written}", and ${reference.path} has no register row keyed "${reference.name}"`,
+            subject: written,
+            severity: leniency(brief),
+            hint: 'a register is a table with a key column, such as "ID" or "Key", and a status column after it',
+          });
+          continue;
+        }
+        const word = statusWord(status);
+        if (words.includes(word)) continue;
+        found.push({
+          line,
+          message: word === '' ? `awaits "${written}", which has no status` : `awaits "${written}", which is "${word}"`,
+          subject: written,
+          severity: waiting,
+          hint: `the round starts once the row is ${either(settled)}: settle it first, or keep this brief a draft until it is`,
+        });
+      }
+      return found;
     }),
   },
   {

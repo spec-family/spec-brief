@@ -172,6 +172,49 @@ describe('an engine over memory', () => {
     expect(findings).toEqual([]);
   });
 
+  it('reads each document the live briefs name, once, a directory as no file, and holds lint and archive to them', async () => {
+    const config = resolveConfig({ claims: { labels: { Implemented: 'done', Specified: 'open' } }, registers: { settled: ['decided'] } });
+    const spec = '# Refunds\n\n<!-- @spec-item id="refund-limit" -->\n- `Specified`: a refund over the capture is refused.\n';
+    const fs = new MemoryFileSystem({
+      'briefs/001_a.md': goodBrief({ raises: '[spec/refunds.md#refund-limit, spec/refunds.md#refund-other]', awaits: '[docs/decisions.md#refund-currency]' }),
+      'briefs/002_b.md': goodBrief({ raises: '[spec#x, spec/refunds.md#refund-limit]' }),
+      'briefs/archive/003_c.md': goodBrief({ status: 'archived', raises: '[spec/old.md#y]' }),
+      'spec/refunds.md': spec,
+      'docs/decisions.md': '| ID | Status |\n| --- | --- |\n| refund-currency | open |\n',
+    });
+    const read = fs.read.bind(fs);
+    const asked: string[] = [];
+    fs.read = (path) => {
+      if (!path.startsWith('briefs/')) asked.push(path);
+      if (path === 'spec') return Promise.reject(new NotAFileError('spec', 'a directory'));
+      return read(path);
+    };
+    const engine = new BriefEngine({ root: '/v', config, configFile: null, fs, git: null, plugins: [] });
+    await engine.load();
+    expect(await engine.documents()).toEqual(new Map([['spec/refunds.md', spec], ['docs/decisions.md', '| ID | Status |\n| --- | --- |\n| refund-currency | open |\n'], ['spec', null]]));
+    expect(asked).toEqual(['spec/refunds.md', 'docs/decisions.md', 'spec']);
+    const found = (await engine.lint()).filter((f) => f.rule === 'raises' || f.rule === 'awaits');
+    expect(found.map((f) => [f.file, f.subject])).toEqual([
+      ['briefs/001_a.md', 'spec/refunds.md#refund-other'],
+      ['briefs/001_a.md', 'docs/decisions.md#refund-currency'],
+      ['briefs/002_b.md', 'spec#x'],
+    ]);
+    const plan = await engine.planArchive('2', { date: '2026-11-08' });
+    expect(plan.blocking.map((f) => [f.rule, f.subject ?? null])).toEqual([
+      ['raises', 'spec#x'],
+      ['claim-not-raised', null],
+    ]);
+  });
+
+  it('stops on a document it fails to read for any reason but its not being a file', async () => {
+    const fs = new MemoryFileSystem({ 'briefs/001_a.md': goodBrief({ raises: '[spec/refunds.md#x]' }) });
+    const read = fs.read.bind(fs);
+    fs.read = (path) => (path === 'spec/refunds.md' ? Promise.reject(new Error('denied')) : read(path));
+    const engine = new BriefEngine({ root: '/v', config: DEFAULT_CONFIG, configFile: null, fs, git: null, plugins: [] });
+    await engine.load();
+    await expect(engine.documents()).rejects.toThrow('denied');
+  });
+
   it('treats an unreadable tree as unknown rather than empty', async () => {
     const fs = new MemoryFileSystem({});
     fs.walk = () => Promise.reject(new Error('denied'));
