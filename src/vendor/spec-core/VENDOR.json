@@ -1,6 +1,6 @@
 {
   "source": "https://github.com/spec-family/spec-core",
-  "commit": "ba72415b45939180d5b36062138d42041b699d71",
+  "commit": "c5e4eff41141b3dfed12e23ddedf7b81bbbf426c",
   "modules": {
     "markdown": {
       "files": {

@@ -33,7 +33,7 @@ what a run reports.
 
 ### Changed
 
-- **The vendored spec-core is at ba72415**, which adds the item a
+- **The vendored spec-core is at c5e4eff**, which adds the item a
   `@spec-item` names and a register's rows to its `markdown` module.
 
 ## 0.12.0
