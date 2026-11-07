@@ -11,7 +11,14 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
-## Unreleased
+## 0.13.0
+
+A brief names the claims its round raises and the register rows it waits
+on, and spec-brief holds it to both: `lint` to a claim that is there and a
+row that is settled once the round has started, `archive` to a claim
+whose label says the work is done. A brief that names neither, and a
+configuration that sets neither `claims` nor `registers`, is read as
+before.
 
 ### Added
 
@@ -27,9 +34,9 @@ what a run reports.
   work. `archive` refuses a round while a claim it raises carries a label
   that says the work is open (`claim-not-raised`). The evidence of a claim
   is left to spec-guard's `claims`, in the same CI run
-  ([ADR-0012](https://github.com/spec-family/spec-brief/blob/main/docs/adr/0012-a-brief-names-the-claims-it-raises.md)). 26 lint rules and 5 collision rules. A brief that
-  names neither field, and a configuration that sets neither key, is read
-  as before.
+  ([ADR-0012](https://github.com/spec-family/spec-brief/blob/main/docs/adr/0012-a-brief-names-the-claims-it-raises.md)).
+  26 lint rules and 5 collision rules. A brief that names neither field,
+  and a configuration that sets neither key, is read as before.
 
 ### Changed
 
