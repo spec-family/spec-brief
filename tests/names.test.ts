@@ -267,6 +267,16 @@ describe('the commands this repository writes', () => {
     expect(runs.filter((run) => run.shownBy === null).map((run) => `${run.where}: ${run.written}`)).toEqual([]);
   });
 
+  it('name the family where it lives, the scope and the org it left on 2026-10-26 only in the records of the move', () => {
+    // The changelog and the ADRs record the move as history. Under the old
+    // names a command fetches what that scope holds now, which is no release
+    // of the family's after the move, and a link lands on a redirect.
+    const left = /@descent-vtt\/|DescentVTT\//i;
+    const history = (file: string): boolean => file === 'CHANGELOG.md' || file.startsWith('docs/adr/');
+    expect(all.filter((file) => !history(file) && left.test(read(file)))).toEqual([]);
+    expect(history('docs/adr/0010-releases-are-published-by-ci.md') && left.test(read('docs/adr/0010-releases-are-published-by-ci.md'))).toBe(true);
+  });
+
   it('show the bare form as what not to write in one place, the README that says why', () => {
     // A place joins this list on purpose, with the comment over it.
     expect([...new Set(runs.flatMap((run) => (run.shownBy === null ? [] : [run.where.split(':')[0]])))]).toEqual(['README.md']);
