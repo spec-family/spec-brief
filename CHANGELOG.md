@@ -11,7 +11,11 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
-## Unreleased
+## 0.13.1
+
+The README is a front page, and the reference ships in the package, in
+`docs/reference/`, so the copy a project installs describes the release it
+runs. Nothing spec-brief checks, prints or exits with changed.
 
 ### Documentation
 
