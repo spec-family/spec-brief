@@ -245,6 +245,7 @@ describe('the commands this repository writes', () => {
     expect(all).toEqual(
       expect.arrayContaining([
         'README.md',
+        'docs/reference/formats.md',
         'CHANGELOG.md',
         'CONTRIBUTING.md',
         'SECURITY.md',
@@ -257,8 +258,11 @@ describe('the commands this repository writes', () => {
         'src/cli.ts',
       ]),
     );
-    // The README is where the commands are: the quick start, the two forms under Names, and the CI jobs.
-    expect(readme.match(/npx --no-install @spec-family\/spec-brief\b/g)?.length ?? 0).toBeGreaterThanOrEqual(8);
+    // The README is where a reader copies the commands from: the quick start, the two forms under Names, and the CI jobs.
+    // The reference's page on CI has the jobs again, and GitLab's.
+    const runners = (text: string): number => text.match(/npx --no-install @spec-family\/spec-brief\b/g)?.length ?? 0;
+    expect(runners(readme)).toBeGreaterThanOrEqual(7);
+    expect(runners(read('docs/reference/formats.md'))).toBeGreaterThanOrEqual(4);
     // This file reads the disk, so it stays out of the unit suite.
     expect(vitestCore.test?.exclude).toContain('tests/names.test.ts');
   });

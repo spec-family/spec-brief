@@ -4,7 +4,9 @@
 
 A *brief* is the input to one round of work - for a coding agent or a person: what done looks like, what the round must not touch, and the checks that prove it finished. spec-brief manages briefs as files in your repository. It has no runtime dependencies, reads and writes nothing but Markdown in two directories, and never writes to git.
 
-spec-brief is one of the [spec-\* tools](https://github.com/spec-family/spec-core#the-family). The family's words - brief, round, wave, scope, the two kinds of plugin - are defined in [concepts](https://github.com/spec-family/spec-core/blob/main/docs/concepts.md), and the [tutorial](https://github.com/spec-family/spec-core/blob/main/docs/tutorial.md) takes one round from the brief to the archive in ten steps.
+spec-brief is one of the [spec-\* tools](https://github.com/spec-family/spec-core#the-family). The family's words - brief, round, wave, scope, the two kinds of plugin - are defined in [concepts](https://github.com/spec-family/spec-core/blob/main/docs/concepts.md), and the [tutorial](https://github.com/spec-family/spec-core/blob/main/docs/tutorial.md) takes one round from the brief to the archive.
+
+## Quick start
 
 ```bash
 npm install --save-dev @spec-family/spec-brief
@@ -12,6 +14,24 @@ npx --no-install @spec-family/spec-brief init
 npx --no-install @spec-family/spec-brief new "Rotate session tokens on privilege change" --wave 1
 npx --no-install @spec-family/spec-brief lint
 ```
+
+`init` writes `.spec-brief.json` and the `briefs/` and `briefs/archive/` directories. `new` scaffolds `briefs/001_rotate-session-tokens-on-privilege-change.md` as a draft, each required section holding its hint in a comment, and a comment is not content, so `lint` reads the fresh brief as unwritten:
+
+```text
+briefs/001_rotate-session-tokens-on-privilege-change.md
+  11  warning  the "Intent" section is empty  empty-section
+               The state of the tree when this round is done, and why it matters. One paragraph.
+  15  warning  the "Negative Scope" section is empty  empty-section
+               What this round must not do, even where it would look helpful.
+  19  warning  the "Not Empowered" section is empty  empty-section
+               Files, interfaces and decisions this round may not change.
+  23  warning  the "Invariants" section holds only a placeholder  placeholder
+               Checks that must hold before the round is called done, each one a task item.
+
+0 errors, 4 warnings, 0 notes in 1 brief(s)
+```
+
+In a draft these are warnings; once the brief says `status: active` they are errors, and the run fails until each section says something.
 
 ## Names
 
@@ -62,431 +82,61 @@ Every privilege change issues a new session token and invalidates the old one.
 - [ ] a rotated token is rejected by every endpoint
 ```
 
-Work put off for later is a brief too, with `status: deferred` and a `trigger` naming the event that brings it back - "when the second tenant signs", "when p95 exceeds 200 ms", never a date: not `Q3`, not `2026-10`. A deferred brief stays in the briefs directory, is never ready, and runs in no wave until someone sets it `active`.
-
-- The id comes from the file name (`012_rotate-session-tokens.md`) or from an `id` field.
-- `affectedFiles` is the scope the round may write.
-- `protectedFiles` is what it is not empowered to change, and archival refuses a round that changed it.
-- Protection wins: what a round may write is `affectedFiles` less `protectedFiles`, so "all of `src/` but the schema" is `affectedFiles: [src/**]` with `protectedFiles: [src/db/schema.ts]`.
-
-### Claims a round raises, rows it waits on
-
-A brief may name the claims its round raises and the register rows it waits on, each as `path#name`, the path from the repository root:
-
-```markdown
----
-status: active
-raises: [spec/refunds.md#refund-limit]
-awaits: [docs/decisions.md#refund-currency]
----
-```
-
-- **`raises`** names a claim: a list item in a specification that opens with a label as code, such as `` `Specified` `` or `` `Implemented` ``, with `<!-- @spec-item id="refund-limit" -->` above it - the claim spec-guard's `claims` holds to its evidence and spec-graph reads. `lint` fails one that is not there, and `archive` refuses the round while a claim it raises carries a label that says the work is still open (`claim-not-raised`). Whether the evidence holds is spec-guard's to say, in the same CI run: no tool calls another.
-- **`awaits`** names a register row by its key: the row of a table with a key column, such as `ID` or `Key`, and a status column after it. `lint` fails an active brief while the row is not settled, and warns of it on a draft or on deferred work, whose round has not started.
-- What the words mean is configuration: `claims.labels` gives each label `"done"` or `"open"`, and `registers.settled` lists the statuses that settle a row. A brief that names neither field is read as before.
-
-```json
-{
-  "claims": { "labels": { "Implemented": "done", "Specified": "open" } },
-  "registers": { "settled": ["decided", "done"] }
-}
-```
-
-### Scope patterns
-
-Scopes are globs in spec-core's `path` dialect, the one every spec-\* tool reads: `*`, `?`, `[a-z]` and `{a,b}` within a name, `**` for any number of directories, compared case-sensitively on every host. The rules:
-
-- `**` is a whole segment: `docs/**.md` is refused, since tools read it three ways - write `docs/**/*.md` for any depth, or `docs/*.md` for one level.
-- Parentheses are literal, `C++(notes).md`, unless a group holds a `|`: an extended glob such as `+(a|b)` is refused, and written `{a,b}`.
-- A trailing `/**` or `/` is a directory's contents - at least one name below it, never the directory itself - on a brace alternative as on the whole pattern: `{src/,lib}` is `src/` or `lib`.
-- Each alternative names a path under the root, as a whole pattern does: `./` is refused, and so is `{./,src}`.
-- A pattern is relative to the repository root, so a leading `/` is refused, on an alternative as on the whole pattern: `/docs` and `{/docs,src}` alike. A leading `./` takes the slashes after it along, as POSIX reads them: `.//docs` is `docs`, and `./{/docs,src}` is `docs` or `src`.
-- After a name, a `/` inside braces names nothing: `docs/{/a,b}` is `docs/a` or `docs/b`.
-- A path with no glob syntax is read from the tree: a file the tree holds is that file, a directory it holds is everything beneath it, and a path it does not hold yet is a file unless it ends in `/`.
-- Write `src/newmod/` for a directory the round creates; `lint` notes a bare `src/newmod` it cannot place.
-
-### How a brief is read
-
-A brief is read as CommonMark reads it wherever that decides what is code or a comment - fenced and indented code, `<pre>`, `<script>`, `<style>` and `<textarea>` blocks, code spans, HTML comments - and nothing inside those is structure.
-
-- **A section**, and the title, is an ATX heading, `## Name`, outside a block quote: prose over a `---` line is prose and a rule, and a heading quoted from another document is not one of the brief's sections.
-- **Section names** compare without case, typographic quotes, emphasis, a leading number or a trailing colon, and a heading may add a qualifier after a separator: `## 2. Commander’s Intent:` fills `Commander's Intent`, and `## Invariants (must hold)` fills `Invariants`.
-- **A task** is a list item outside a block quote with `[ ]`, `[x]` or `[X]`.
-- **The links archival rewrites** are the ones that write a destination: `[text](dest)`, `![alt](dest)` - one inside a link's text too - and a definition, `[label]: dest`, through which a reference is rewritten once. A definition is one where CommonMark reads it, opening a paragraph or under another: the shape of one under a paragraph's text, or in alt text, is text and stays as written.
+`affectedFiles` is the scope the round may write, as globs, and `protectedFiles` what it is not empowered to change; `dependsOn` and `wave` say when it runs. [The brief](docs/reference/brief.md) has the rest: deferred work, the claims a round raises and the register rows it waits on, the scope patterns, and how a heading, a task and a link are read.
 
 ## Commands
 
-### `spec-brief init`
-
-Writes `.spec-brief.json` with every default spelled out, and creates the brief and archive directories. `--briefs <dir>` and `--archive <dir>` choose them, and `--root <dir>` the directory to set up, which `init` makes when it is not there. It takes no argument: `init mydir` is [refused](#an-input-that-names-nothing).
-
-### `spec-brief new <title>`
-
-Scaffolds a brief with the next free number - one more than the highest id, live or archived, since ids are never reused - and every required section, each holding its `hint` in a comment. A comment is not content, so a fresh brief reads as unwritten until someone writes it. `--id`, `--type`, `--wave`, `--depends-on 7,8` and `--date` fill the front matter; without `--date` the date is [today's](#todays-date).
-
-### `spec-brief lint [brief...]`
-
-Checks every brief, or the ones named. A draft (`status: draft`) gets its unwritten sections as warnings; an active brief gets them as errors. Archived briefs are frozen records: they are checked for identity and for the freeze, never against today's schema.
-
-```text
-briefs/035_the-background-side.md
-    5  error    has no "Report" section  missing-section
-                add a "## Report" heading
-   48  error    "Context" comes before "Standing directives"  section-order
-                the order is Mission, Standing directives, Context, Deliverables, ...
-
-2 errors, 0 warnings, 0 notes in 35 brief(s)
-```
-
-### `spec-brief list`
-
-Live briefs with their status, in the word the brief writes (`封存` where the configuration names it for archived), wave, task count, readiness and title.
-
-- **The title** is shown without the id it repeats: `new` writes `# 012 — Rotate tokens`, and the table has an id column, so the title shown is `Rotate tokens`. Only the brief's own id comes off, and only before a dash, a colon or a spaced hyphen, so `Fix - the login bug` is shown whole. `schedule` shows titles the same way, and `--format json` gives the title as written.
-- **A brief is *ready*** when every brief it depends on is archived, and it is neither a draft nor deferred.
-
-| Option | Shows |
+| Command | What it does |
 | --- | --- |
-| `--ready` | Only the ready briefs, which is the question an orchestrator asks. |
-| `--archived` | The archive as well. |
-| `--format json` | The whole table, for an orchestrator, the sections the configuration asks for, each with its `hint`, and what the answer was read from. |
+| `spec-brief init` | Writes `.spec-brief.json` with every default spelled out, and the brief and archive directories. |
+| `spec-brief new <title>` | Scaffolds a brief with the next free number and every required section. |
+| `spec-brief lint [brief...]` | Checks every brief, or the ones named, against the sections and fields the repository requires, and an archived one for its freeze. |
+| `spec-brief list` | Live briefs with their status, wave, task count, readiness and title; `--ready` for the ones that can run now. |
+| `spec-brief matrix` | Compares the scopes of the briefs in each wave as globs, and names a file two of them would both write. |
+| `spec-brief schedule` | Computes the waves the live briefs can run in and says why each brief moves; `--write` sets them. |
+| `spec-brief archive <brief>` | Closes a round in one transaction - banner, links, integrity hash, the move - or refuses with every reason. |
+| `spec-brief unarchive <brief>` | Reopens an archived brief as the brief it was. |
 
-**What the answer was read from.** `--format json` names, under `inputs`, every input of its answer, so that a tool that asks for the same answer again, as spec-harness does before each write it checks, can give the one it kept while every input reads as listed, without starting spec-brief ([the family contract](https://github.com/spec-family/spec-core/blob/main/docs/adr/0005-the-family-contract.md), amended 2026-10-19):
-
-```json
-"inputs": {
-  "keep": true,
-  "tool": "0.10.0",
-  "files": [
-    { "path": ".spec-brief.json", "sha256": "ca3d163b..." },
-    { "path": "briefs/001_a.md", "sha256": "5ee9361a..." },
-    { "path": "spec-brief.json", "sha256": null }
-  ],
-  "directories": [
-    { "path": "briefs", "entries": ["001_a.md", "README.md"] },
-    { "path": "briefs/archive", "entries": null }
-  ],
-  "git": null
-}
-```
-
-- **`files`**: each file read, with the SHA-256 of its bytes in hex, and each name a configuration was looked for under and was not there, with `null`: it must still not be there.
-- **`directories`**: each directory the briefs were listed from, with the names of the regular files directly in it, sorted as JavaScript sorts strings. A link and a directory are no file here, and a file that is no brief is named though it is not read, since one renamed would be. A directory looked for and not found, as an archive not yet made, has `null`: there must still be no directory there.
-- **`tool`**: the version that read them. **`git`**: `null`, since `list` reads nothing of git, and asks it nothing where a configuration file names the root.
-- **Paths** are POSIX, from the root, which wherever `keep` is `true` is the directory the run started in.
-- **`keep` is `false`**, and the lists are empty, wherever spec-brief cannot name every input: a run that starts below its configuration's directory, or names a configuration in another, and one with no configuration file, where git or the search above the root finds the root.
-
-### `spec-brief matrix`
-
-Compares the `affectedFiles` of every pair of live briefs in the same wave, `--all-waves` for every pair. Deferred briefs, and briefs that wait on one directly or through another, are listed and left out: they run in no wave until the deferred work comes back, as `schedule` places them nowhere, so the two agree on which briefs run side by side.
-
-```text
-wave 1 · 3 briefs
-       001  002  003
-  001    ·    X    ·
-  002    X    ·    ·
-  003    ·    ·    ·
-  X 001 "src/auth/**" and 002 "src/**/session.ts" both cover src/auth/session.ts
-  ? 003 declares no affectedFiles and cannot be checked
-```
-
-Scopes are intersected as globs, not compared as strings: the two above share no prefix and still meet. Exit 1 on a collision.
-
-- **The file named** is one both patterns match and neither brief protects - always a file, never a directory. It is a file the tree holds where there is one, the first in git's order; where the tree holds none, it is the shortest path the search built, said to be an example: `both cover src/newmod/a.ts, an example not in the tree`. `--format json` says which, as `inTree` on each pair of patterns: `true`, `false`, or `null` when the tree could not be read.
-- **One collision per pair of briefs**: two briefs whose scopes meet in several places are one collision, listing every pair of patterns that meets.
-- **Unscoped**: a brief with no scope is reported as unscoped rather than counted as safe.
-- **Undecided**: the search for a shared file has a budget; a pair it cannot decide within it is marked `?` and reported as `collision-undecided`, a warning, never as a collision and never as clean - unless the tree holds a file both patterns match and neither brief protects, which proves the collision.
-- **A mark is a finding**: the grid marks a pair, and a line beneath it says why, only for what the run reports, so a [rule](#rules) that is off marks nothing. `shared-directory` is off unless the configuration turns it on; on, two briefs that write into one directory without sharing a file are marked `~`. `--format json` lists every pair the comparison found under `waves`, and the `findings` the run reports beside them.
-
-### `spec-brief schedule`
-
-Computes the waves the live briefs can run in, drafts included, and sets each beside the wave it declares:
-
-- A brief runs after every dependency that is still live - an archived one is done - and shares a wave with no brief whose writable scope meets its own.
-- Briefs are taken in dependency order, ties broken by id, and each goes into the lowest wave that is after its dependencies and holds nothing it collides with.
-- A brief with no `affectedFiles` cannot be proved apart from anything, so it runs in a wave of its own and is reported as `unscoped`.
-- The first wave is the lowest any brief declares, or 1.
-
-```text
-wave 1 · 2 briefs
-  001  Rotate session tokens
-  003  Audit log            moves from wave 2
-         wave 2 also holds
-         nothing holds it later
-wave 2 · 1 brief
-  002  Store sessions       moves from wave 1
-         wave 1 does not hold: 001 there also writes src/auth/session.ts
-         not wave 1, where 001 also writes src/auth/session.ts ("src/**/session.ts" and "src/auth/**")
-
-waits: 007 on 006, which is deferred
-deferred: 006
-2 briefs would move; "spec-brief schedule --write" writes the waves
-```
-
-Each move says why:
-
-- first, whether the declared wave holds - whether `lint` and `matrix` would pass it: no brief there that it collides with, its dependencies in earlier waves, and the briefs that depend on it in later ones;
-- the dependency that sets the earliest wave;
-- for every wave passed over, the brief there and the file both would write.
-
-A deferred brief, and one that waits on it, is placed nowhere; a dependency cycle is an error, and nothing in or after it is placed.
-
-`--write` sets `wave` in the front matter of each brief whose wave changes, in one transaction, and writes nothing over a cycle:
-
-- every other line stays as it was;
-- a comment after the old wave, `wave: 2  # after the review`, stays after the new one;
-- a brief whose lines end in both LF and CRLF is written with the ending of its first line throughout, as `archive` writes one.
-
-`--format json` gives an orchestrator the waves, each brief's declared and proposed wave with the reasons and whether the declared one holds, and what waits on what; `sarif`, `github` and `gitlab` carry a `wave-schedule` finding per move.
-
-The result is the same every time for the same briefs. It is a valid schedule, not always the shortest: no fast method promises the fewest waves, and a person can always move a brief later by hand, which `lint` and `matrix` then check. So a move is an error only when the declared wave does not hold, or there is none: a declared wave that holds is the person's to keep, and its move is a note.
-
-| Exit | When |
-| --- | --- |
-| `0` | Every declared wave holds. |
-| `1` | A brief declares no wave or one that does not hold, or the dependencies form a cycle. |
-| `2` | The run cannot be trusted. |
-
-### `spec-brief archive <brief>`
-
-Closes a round. Refused, with every reason, when:
-
-- the brief has lint errors, is a draft, or depends on a brief that is still live;
-- a task item is neither ticked nor dispositioned:
-  - an open box counts as closed when a note under it starts with one of the `dispositions` (`**Delegated`, `**Accepted debt`, `**Rejected` by default);
-  - a note is a line under the box, above any box nested in it, that starts a bullet, a paragraph after a blank line, or a line after one that ends a sentence;
-  - a line that continues a sentence is the box's text wrapping, not a note, so `- [ ] Explain why the` over `  **Rejected** designs failed` is open, and `- [ ] Add a cache.` over `  **Rejected** by 012` is closed;
-- the working tree holds uncommitted work outside the brief directories (`--allow-dirty` to proceed);
-- the round's commit changed a file in `protectedFiles` - one refusal per file, naming it, unless a spec-brief plugin that verifies rulings [waives it](#waiving-a-refusal).
-
-Two warnings, which `--strict` turns into refusals:
-
-- Changes outside `affectedFiles` are a warning, and an error under `--strict`.
-- A scope is never passed by checks that measured nothing. When the files the round changed are unknown - no `--commit`, `--base` or `archiving.base`, `--no-git`, or a commit already in the base branch, as on `main` after the merge - a brief that declares one gets `scope-unmeasured`, a warning, and a refusal under `--strict`.
-
-Otherwise, in one transaction, it:
-
-- writes the archived brief with its status set, a frozen banner under the front matter, every relative link rewritten for the archive directory, and an `integrity` hash;
-- rewrites the links other live briefs hold to it;
-- removes the original.
-
-With `archiving.rewriteLinks` off, no link is rewritten, and the links other live briefs are left holding are reported as `stale-link`. Archiving an archived brief does nothing and exits 0.
-
-| Option | What it does |
-| --- | --- |
-| `--commit <rev>` | Records the commit and the files it changed. |
-| `--base <rev>` | Measures from the merge base instead, for a branch of several commits. |
-| `--pr <n>` | Links the pull request. |
-| `--summary <text>` | What the round did, in the banner. |
-| `--date <YYYY-MM-DD>` | The date in the banner, where it is not [today's](#todays-date). |
-| `--dry-run` | Prints the plan and the banner, and writes nothing. |
-
-spec-brief reads git and never writes it. Review the change and commit it with the round.
-
-### `spec-brief unarchive <brief>`
-
-Reopens an archived brief: the banner and the hash come off, the status goes back to the live word, and the links are rewritten again. A brief archived and reopened is the brief it was, blank lines and final newline included, with four exceptions:
-
-1. The status line is written in its plain spelling.
-2. A relative link that had to be rewritten comes back in its shortest form (`./b.md` returns as `b.md`).
-3. An empty front matter block, `---` over `---`, comes back as none, since archival gives a brief with no front matter a block for its hash and reopening takes away a block it leaves empty.
-4. A brief whose lines end in both LF and CRLF comes back with the ending of its first line throughout.
-
-### Every command
-
-Every command takes these, except where the last column names it: an option is [refused where taking it would tell someone what is not so](#an-option-a-command-does-not-read).
-
-| Flag | What it does | Not for |
-| --- | --- | --- |
-| `--root <dir>` | Runs from another directory, which must be there: only `init` makes one that is not. | |
-| `--config <file>` | Names the configuration. | `init`, which writes `.spec-brief.json` |
-| `--no-config` | Uses the defaults. | |
-| `--format <format>` | `pretty` by default, or `json`; `lint`, `matrix` and `schedule`, which report findings, also write `sarif`, `github` and `gitlab`, and `--help` lists each command's formats. | |
-| `--strict` | Makes warnings fail the run. | `init`, `new` and `list`, which have none |
-| `--no-git` | Leaves git out even inside a repository: the tree is read from disk, and `archive` records no commit. | |
-| `--color` | Colour, whatever the environment and the terminal say. | `init` and `new`, which print none |
-| `--no-color` | No colour, whatever they say. | |
-| `--help`, `--version` | Do what they say, on a line that is otherwise one to run: [a line refused for what it holds](#the-help-on-a-wrong-line) is refused with either of them on it, and the two together are refused. | |
-
-Without `--color` or `--no-color`, `NO_COLOR` set to anything turns colour off; otherwise `FORCE_COLOR` turns it on, and `FORCE_COLOR=0` or `FORCE_COLOR=false` off, on a terminal too; otherwise `TERM=dumb` turns it off; otherwise a terminal has colour and a pipe has none. `NO_COLOR` or `FORCE_COLOR` set to nothing is as unset. Only the `pretty` format has colour.
-
-**Exit codes:**
-
-| Code | Means |
+| Exit | Means |
 | --- | --- |
 | `0` | Clean. |
 | `1` | Findings, a collision, or a refused action. |
-| `2` | The run could not be trusted, or its answer did not arrive - a bad flag, [an input that names nothing](#an-input-that-names-nothing), [an option the command does not read](#an-option-a-command-does-not-read), [an option given two values](#an-option-given-two-values), a configuration that does not load, a brief that does not exist, a git command that failed, a `SOURCE_DATE_EPOCH` that [cannot be read as a date](#todays-date) where one is to be written, a stdout its reader closed before all of the output was written, as a pipeline into `head` does, each said in one line on stderr, or an error spec-brief did not expect, reported on stderr as `spec-brief: unexpected error:` with its stack. |
+| `2` | The run could not be trusted, or its answer did not arrive: a bad flag, a configuration that does not load, a briefs directory that does not exist, among others. |
 
-A run over a briefs directory that does not exist exits 2, because a check over nothing looks exactly like a clean one.
+[Commands](docs/reference/commands.md) has each command in full, and [options](docs/reference/options.md) what every command takes, the exit codes, and the lines refused rather than guessed at.
 
-### An input that names nothing
+## Checks
 
-An option, an argument or a path that is given and names nothing is refused: exit 2, one line that names it, nothing written. None is read as if it had not been given. `--root "$DIR"` where the variable is not set would otherwise run in the current directory, and the answer would look like the one that was asked for.
+| What | Rules |
+| --- | --- |
+| The front matter | `front-matter`, `field`, `unknown-field`, `status`, `id`, `duplicate-id`, `title`, `unknown-type` |
+| The sections | `missing-section`, `duplicate-section`, `empty-section`, `placeholder`, `missing-checklist`, `must-contain`, `section-order` |
+| Dependencies and deferred work | `dependency`, `dependency-cycle`, `wave-order`, `deferral-trigger` |
+| Claims raised and rows awaited | `raises`, `awaits` |
+| Scopes | `glob`, `scope-contradiction`, `glob-matches-nothing`, `literal-read-as-file` |
+| Briefs side by side (`matrix`, `schedule`) | `collision`, `collision-undecided`, `unscoped`, `shared-directory`, `wave-schedule` |
+| Archived briefs and archival | `archive-freeze`, `scope-unmeasured`, `stale-link` |
 
-- **An option given nothing.** Every option that takes a value refuses one that is empty or only space, by the option's name: `--id is "", which is no value`. No option gives an empty value a meaning; leave the option out for what it does by default.
-- **A list that names nothing.** `--depends-on ,` names no brief, and a brief that depends on nothing is one scaffolded without the option. A place in a list that names no brief, the comma too many in `7,8,` or the gap in `7,,8`, is refused as well: it is a brief left out, as `"$A,$B"` is with one of the two unset.
-- **An argument a command does not take.** `init`, `list`, `matrix` and `schedule` take none and refuse one by name, with their usage. `init mydir` set up the current directory; `init --root mydir` is what sets up another.
-- **A `--root` that is no directory.** A file, or a path that does not exist, is refused: the search for a configuration would go on from its parent, and the run would report on, or `new` write into, the tree above. A directory below the configuration's is a place to start from, as the current directory is.
-- **A configuration that is not a file**, named by `--config` or found under the configuration's name, does not load, and is said so in a line before it is opened, as one that is not JSON is: a directory, a named pipe, which was read without end, a socket or a device. A link is read as what it names.
-- **A template, a plugin or what stands where a brief would move that is not a file** is refused in a line before it is opened, and nothing is written: the `template` a configuration names, a plugin's module and each `package.json` spec-brief reads to find one, and what stands where `archive` or `unarchive` would write the brief, which a plan made from the files a listing names cannot have seen. A named pipe there had the run wait without end, a link to `/dev/null` as the template wrote a brief of no bytes, and a directory or a socket ended the run on a stack. A link is read as what it names.
-
-### An option a command does not read
-
-An option is refused where taking it would tell someone what is not so: exit 2, one line that names the command, the option, what the command does read and what it takes besides, nothing written. `init --strict` would otherwise say the briefs had been set up strictly, and `init --config team.json` that the configuration had been written there.
-
-| Command | Refuses | Because it would say |
-| --- | --- | --- |
-| `init` | `--config`, `--strict`, `--color` | That the configuration was written to the file named, where `.spec-brief.json` is; that something was strict, where `init` has no warning to fail on; that colour was printed, where it prints none. |
-| `new` | `--strict`, `--color` | That a warning would have failed it, where it has none; that colour was printed, where it prints none. |
-| `list` | `--strict` | That a warning would have failed it, where it reports no finding. |
-
-```text
-spec-brief: init does not read --strict; it reads --root, --format, --briefs and --archive, and takes --no-config, --no-git and --no-color
-```
-
-- **Two options of which one would go unread** are refused together, for the same reason: `--config <file>` beside `--no-config` says the file was read, where the defaults ran and it was never opened, and `--color` beside `--no-color` that colour was forced on, where it was off. Give one of the two.
-- **An option that asks a command to leave out what it never does is taken**, since it asks for what is already so: `--no-color` by `init` and `new`, which print no colour, `--no-git` by `init`, which asks git nothing, and `--no-config` by `init`, which opens no configuration file. A script that runs every command in a tree without git, or into a log, passes such an option to each of them. `init --no-config` still writes over no configuration: where one is there, it stops as `init` does.
-- **An option a format has nothing to read for is taken**: `--no-color` or `--color` beside `--format json` changes nothing, and a caller that asks for JSON passes `--no-color` beside it.
-- **`--help` and `--version` are no way past a refusal**: `init --strict --help` is refused as `init --strict` is ([the help on a wrong line](#the-help-on-a-wrong-line)).
-
-### An option given two values
-
-An option that takes one value is given one. Given two that read as two, the run is refused: exit 2, one line that names both as they were written, nothing written. The later was read and the earlier went unread, with no word of it: `list --root nowhere --root .` listed `.`, and `lint --format json --format pretty` printed `pretty` to a script that had asked for JSON.
-
-```text
-spec-brief: --root is given "nowhere" and ".", and takes one value; give one of the two
-```
-
-- **One value given twice is taken once, however it is written.** Two values are compared as each is read: `--root` and `--config` as the paths they resolve to, so `--root .` beside `--root ./`, and on Windows with the drive letter in either case, so `C:\x` beside `c:\x`, where `C:\x` beside `C:\X` is two; `--briefs` and `--archive` as directories of the repository, so `specs` beside `./specs/`; `--wave` and `--pr` by the number their digits write, so `1` beside `01`; `--depends-on` by the set of ids it names, each as an id is matched to a brief, so `7,8` beside `8,7` or `7, 8`, and `7` beside `007`, and the brief is written with the later; `--summary` with the spaces around it taken off. Any other value is read as it is written, in its own case.
-- **A revision written two ways is asked of git**: `archive` asks git once what commit each value of `--commit`, or of `--base`, names, and takes `HEAD` beside the hash it names as one value. Two that name two commits, or one git cannot name, are two values; so are any two beside `--no-git`, `--help` or `--version`, none of which asks git.
-- **Every option that takes a value takes one.** `--depends-on` is a list written in one value, and no option adds to a list each time it is given. A flag given twice is that flag once.
-- A shell alias or a script that gives an option, and a line that gives it again to override it, is refused: give the option once.
-
-### The help on a wrong line
-
-A line refused for what it holds is refused with `--help` or `--version` on it, before it or after it, as an option spec-brief does not know always was. `init --strict --help` printed the help and `list --format sarif --version` the version, each exit 0, and said nothing of what was wrong. `--help` beside `--version` is refused too, in either order: one of the two answers went unread.
-
-```text
-spec-brief: --help is given beside --version, and one of the two answers would go unread; give one of the two
-```
-
-- **What the line alone decides is refused there**: an option or a command spec-brief does not know, [an input that names nothing](#an-input-that-names-nothing), [an option the command does not read](#an-option-a-command-does-not-read) and the pairs, `--commit` or `--base` beside `--no-git`, a `--format` the command does not write, [two values](#an-option-given-two-values), a `--wave` or `--pr` that is no number it takes, a `--date` that is no date, a revision that begins with `-`, a directory for `init` outside the repository or one for both, and a second brief for `archive` or `unarchive`.
-- **What only the tree can refuse is not asked**: a `--root` that is not there, a configuration that does not load, an id that is taken, a type the configuration does not have, a brief or a commit that is not there. `--help` and `--version` open nothing, and answer.
-- **What a command lacks is what the help is asked about**: `new --help` and `archive --help` print the help, though `new` without a title and `archive` without a brief are refused.
-
-### Today's date
-
-`new` writes a date into the front matter and `archive` one into the banner: the one `--date` gives, or today's. Today is the clock's date in UTC, unless `SOURCE_DATE_EPOCH` is set, the variable a pipeline sets to have every run write the same bytes ([its specification](https://reproducible-builds.org/specs/source-date-epoch/)): then it is the date of that time, in UTC.
-
-- **What it holds**: whole seconds since 1970-01-01 in digits alone, as `date +%s` prints them, from `0` to `253402300799`, the last second of 9999-12-31 and of the dates written `YYYY-MM-DD`.
-- **Anything else is refused**, never read as unset: a word, `1.5`, `-1`, a space or a newline beside the digits, a later time, or nothing at all, which is what `SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)` leaves where git failed. `new` and `archive` then write nothing and exit 2 with a line that names the variable and shows what it holds. The clock's date, written where a pipeline asked for its own, would look like any other.
-- **Only a run that would use it reads it**: `--date` gives the date instead, and `init`, `lint`, `list`, `matrix`, `schedule`, `unarchive`, `--version` and `--help` write none, so each runs whatever the variable holds.
+`archive` also refuses a round for reasons of its own, such as an open task, a live dependency, a claim still open, uncommitted work or a protected file changed. [Rules](docs/reference/rules.md) has what each rule reports and its default severity, and a [plugin](docs/reference/plugins.md) adds rules of its own.
 
 ## Configuration
 
-`.spec-brief.json` (or `spec-brief.json`) at the root; the nearest one above the working directory is used, and its directory is the root. It is a file, and JSON, validated against [`schema.json`](schema.json): an unknown key, a misspelt rule or a value of the wrong type stops the run with exit 2 rather than falling back to defaults and reporting on the wrong rules.
-
-| Key | Default | What it says |
-| --- | --- | --- |
-| `briefs` | `"briefs"` | Directory of live briefs. |
-| `archive` | `"<briefs>/archive"` | Directory of archived briefs. |
-| `files` | `"[0-9]*.md"` | Glob a file name must match to be a brief. |
-| `exclude` | `[]` | File-name globs that are never briefs, such as an index. |
-| `template` | `null` | A template file for `new`, with `{id}`, `{title}`, `{date}`, `{type}`, `{wave}`, `{status}`. |
-| `id` | `{ "source": "filename", "separator": "_", "digits": 3 }` | Where an id comes from, and how a new one is written. |
-| `status` | `{ "field": "status", "draft": "draft", "active": "active", "deferred": "deferred", "archived": "archived" }` | The words a repository uses. `field` may be a key of any script, `狀態` as well as `status`, followed by an ASCII colon in the brief; `field: null` reads status from location alone; `draft` and `deferred` may be `null` where a repository has no such word. |
-| `sections` | Intent, Negative Scope, Not Empowered (optional), Invariants (checklist) | Sections every live brief carries: a name, or `{ name, aliases, mustContain, checklist, optional, hint }`. `hint` is below. |
-| `sectionOrder` | `false` | Sections must appear in the listed order. |
-| `types` | `feature`, `defect`, `refactor`, `chore` | Brief types and the sections each adds. |
-| `placeholders` | `TBD`, `TODO`, `FIXME`, ... | Words that mark a section as unwritten: alone or ended by `.`, `!`, `?`, `;`, `…` or `-`, and then nothing, or a space, a colon or an em dash and a note. `TODO.md` and `TODO-driven` are words, not placeholders. |
-| `fields` | `[]` | Front-matter keys the repository uses beyond the built-in ones. |
-| `archiving.tasks` | `"all"` | `"all"`, or the sections whose boxes must be closed. |
-| `archiving.dispositions` | `**Delegated`, `**Accepted debt`, `**Rejected` | What a note under an open box starts with to close it. |
-| `archiving.banner` | see [`src/config.ts`](https://github.com/spec-family/spec-brief/blob/main/src/config.ts) | Banner lines, with `{date}`, `{summary}`, `{pr}`, `{commit}`, `{diffstat}`, `{links}`, `{id}`, `{title}`, `{author}`. A line with an empty placeholder is left out. |
-| `archiving.rewriteLinks` | `true` | Rewrite relative links when a brief moves: its own, and the ones other live briefs hold to it. Off, neither is edited, and the links other briefs are left holding are reported as `stale-link`. |
-| `archiving.freeze` | `true` | Write an integrity hash, so a later edit is caught. |
-| `archiving.base` | `null` | Branch the diff is measured from, such as `"main"`. |
-| `claims.labels` | `{}` | Each label a claim is written with, and whether it says the work is `"done"` or `"open"`, for the claims a brief [raises](#claims-a-round-raises-rows-it-waits-on). |
-| `registers.settled` | `[]` | The statuses that settle a register row a brief [awaits](#claims-a-round-raises-rows-it-waits-on), compared without case by the word a status opens with. |
-| `rules` | `{}` | Severity per rule: `off`, `note`, `warning` or `error`. |
-| `plugins` | `[]` | Modules that contribute rules: a path or package, or `{ module, options }`. |
-
-A section's `hint` says what the section must answer, so a tool helping to write a brief can ask for each section by what it is for:
-
-- a new brief carries it as a comment under the heading;
-- a finding that the section is missing or unwritten gives it as the next step;
-- the JSON of `list` and `lint` reports it.
-
-A repository whose briefs have eight ordered sections, `proposed` and `archived` for words, and a banner of its own:
+`.spec-brief.json` at the root, validated against [`schema.json`](schema.json): an unknown key, a misspelt rule or a value of the wrong type stops the run with exit 2. `init` writes every default spelled out; a repository needs only what it changes:
 
 ```json
 {
   "$schema": "./node_modules/@spec-family/spec-brief/schema.json",
-  "files": "[0-9][0-9][0-9]_*.md",
-  "status": { "draft": null, "active": "proposed", "archived": "archived" },
   "sections": [
-    "Mission",
-    { "name": "Standing directives", "mustContain": ["Latest ≠ Newest"] },
-    "Context",
-    { "name": "Deliverables", "checklist": true },
-    "Not empowered",
-    "Architectural empowerment",
-    "Verification",
-    "Report"
+    "Intent",
+    "Negative Scope",
+    { "name": "Invariants", "checklist": true }
   ],
-  "sectionOrder": true,
-  "types": {},
-  "archiving": {
-    "tasks": ["Deliverables"],
-    "banner": ["**Executed {date} in pull request {pr}.** {summary} The body below describes the tree before execution and is not maintained."]
-  }
+  "archiving": { "base": "main" },
+  "rules": { "shared-directory": "warning" }
 }
 ```
 
-How a heading fills a section, and what counts as a heading, a task or a link, is under [How a brief is read](#how-a-brief-is-read).
-
-## Rules
-
-<!-- rules:start -->
-| Rule | Default | Reports |
-| --- | --- | --- |
-| `front-matter` | error | Front matter that does not parse, a duplicate key, YAML beyond the flat subset, TOML. |
-| `field` | error | A field spec-brief reads with a value of the wrong shape: a wave that is not a whole number, a list where one value belongs. |
-| `unknown-field` | warning | A front-matter key nobody declared, with the one probably meant. |
-| `status` | error | No status, a word the configuration does not use, or a status that disagrees with the directory. |
-| `id` | error | No id, or one with whitespace or a slash. |
-| `duplicate-id` | error | Two briefs, live or archived, with one id. |
-| `title` | warning | A live brief with no title. |
-| `unknown-type` | error | A type the configuration does not define. |
-| `missing-section` | error | A required section that is absent. |
-| `duplicate-section` | warning | A section that appears twice. |
-| `empty-section` | error | A section with no content; a comment is not content. A warning in a draft. |
-| `placeholder` | error | A section holding only `TBD`, `TODO` or an empty box. A warning in a draft. |
-| `missing-checklist` | error | A checklist section with no task item. A warning in a draft. |
-| `must-contain` | error | A section without the text the configuration requires of it. |
-| `section-order` | error | Sections out of the configured order, when one is configured. |
-| `dependency` | error | A dependency on itself, or on a brief that does not exist. |
-| `dependency-cycle` | error | Live briefs that depend on each other in a cycle, reported once, as a path. |
-| `wave-order` | error | A live dependency that does not run in an earlier wave. |
-| `deferral-trigger` | error | A deferred brief with no `trigger`, or one that is only a date or a time - `2026-10`, `Q3`, `next month`, `October` - or a placeholder, rather than an event such as "when the second tenant signs". The words for a time are English. |
-| `raises` | error | A claim in `raises` that is not `path#name`, names a document that is not a file, or names no claim there: a list item opening with a configured label, under `<!-- @spec-item id="..." -->`. Claims raised with no labels configured. A warning in a draft. |
-| `awaits` | error | A row in `awaits` that is not `path#key`, or that no register in the document keys. A row whose status is not one of `registers.settled`, a warning in a draft or deferred work. Rows awaited with no settled statuses configured. |
-| `glob` | error | A scope pattern spec-brief cannot read. |
-| `scope-contradiction` | error | Patterns in `affectedFiles` that `protectedFiles` cover entirely, so nothing of them is writable - one finding per brief, naming each. A pattern the search cannot decide is a warning. |
-| `glob-matches-nothing` | note | A scope pattern that matches no file git sees, tracked or untracked - expected when the round creates it. |
-| `literal-read-as-file` | note | A path with no glob syntax that the tree does not hold and whose name has no extension, such as `src/newmod`: read as a file, and `src/newmod/` if a directory was meant. Inside braces the advice is the pattern written with the `/` added, `lib/{util,new/}`, or the alternative in an entry of its own, `lib/new/`. |
-| `archive-freeze` | error | An archived brief that changed after it was archived. |
-| `collision` | error | Two briefs in one wave whose scopes can name the same file (`matrix`). |
-| `collision-undecided` | warning | Two briefs in one wave whose collision the search could not decide within its budget and no file of the tree proves (`matrix`), or a wave `schedule` passed over for it. |
-| `unscoped` | note | A brief sharing a wave that declares no scope (`matrix`), or one `schedule` runs alone. |
-| `shared-directory` | off | Two briefs in one wave writing into the same directory (`matrix`). |
-| `wave-schedule` | error | A brief with no wave, or a declared wave that does not hold - a collision in it, a dependency out of order - with the wave `schedule` computes and why (`schedule`). A declared wave that holds and is not the computed one is a note. |
-| `scope-unmeasured` | warning | A brief with a scope archived without the files its round changed, so nothing checked the scope (`archive`). |
-| `stale-link` | warning | Links in live briefs left pointing where a brief used to be, when `archiving.rewriteLinks` is off (`archive`, `unarchive`). |
-<!-- rules:end -->
-
-`archive` refuses with its own reasons - `open-task`, `archive-draft`, `archive-deferred`, `dependency-open`, `claim-not-raised`, `dirty-tree`, `protected-file`, `out-of-scope`, `archive-exists` - and says `waived` and `waiver-ignored` of what [plugins](#waiving-a-refusal) lift; none of these are lint rules: they are about whether this round is done, not whether the brief is well written. The rules marked `archive` above are raised by archival too, and configuration sets their severity like any other.
+[Configuration](docs/reference/configuration.md) has every key and its default.
 
 ## In CI
 
@@ -498,112 +148,16 @@ After the job has installed the project, with `npm ci`:
 - run: npx --no-install @spec-family/spec-brief schedule --format github
 ```
 
-Each gives `npx` the package's [full name](#names) and `--no-install`: a job that lost its install step then stops, where the command's name alone would fetch whatever package has that name.
+Each gives `npx` the package's [full name](#names) and `--no-install`: a job that lost its install step then stops, where the command's name alone would fetch whatever package has that name. [CI and output formats](docs/reference/formats.md) has GitLab's job, and the `sarif`, `gitlab` and `json` formats.
 
-| Format | What it writes |
-| --- | --- |
-| `github` | Workflow commands, which annotate the pull request with no upload and no permission. |
-| `sarif` | SARIF 2.1.0, for code-scanning upload. |
-| `gitlab` | A GitLab Code Quality report - an array of `{ description, check_name, fingerprint, severity, location: { path, lines: { begin } } }` - for a merge request to show. |
-| `json` | A versioned document for anything else: `schemaVersion` changes when a field changes meaning, and is 2 since a collision became a pair of briefs rather than a pair of patterns. |
+## Documentation
 
-```yaml
-spec-brief:
-  script:
-    - npm ci
-    - npx --no-install @spec-family/spec-brief lint --format gitlab > gl-code-quality.json
-  artifacts:
-    reports:
-      codequality: gl-code-quality.json
-```
-
-In the GitLab report:
-
-- An error is `major`, a warning `minor` and a note `info`; GitLab's `critical` and `blocker` are for security holes and crashes, which no finding here is.
-- The `description` is the message and the next action.
-- The fingerprint is a SHA-256 of what the finding is: its rule, its file, its brief, and what it is about there - a section, a pattern, a dependency, the other brief of a pair - never the message, the hint or the line. So a finding that moves, or is worded another way, or a collision that names another file both briefs write, is the same issue; two findings alike in all four, such as two problems in one front matter, are told apart by their order.
-
-## As a library
-
-```ts
-import { BriefEngine } from '@spec-family/spec-brief';
-
-const engine = await BriefEngine.open({ cwd: process.cwd() });
-const findings = await engine.lint();
-const ready = engine.ready();                        // what can run now
-const { report } = await engine.collisions();        // who collides with whom
-const { schedule } = await engine.schedule();        // the waves, computed
-const plan = await engine.planArchive('012', { commit: 'HEAD', pr: 41 });
-if (plan.blocking.length === 0) await engine.apply(plan);
-```
-
-Everything below the engine is a pure function of text: `parseBrief`, `lint`, `collisions`, `meet`, `globWitness`, `planArchive`. `MemoryFileSystem` runs an engine over files that were never written, which is how a harness can ask what archiving a brief would do.
-
-`parseGlob`, `matchGlob`, `intersectGlobs` and `globBase` keep their 0.1 signatures as a compatibility layer over the spec-core engine. They follow its dialect: a literal is read as a file unless `parseGlob` is told otherwise (`{ literal: 'directory' | 'either' | (path) => ... }`, where `readingIn(files)` reads it from a tree), and `intersectGlobs` throws where `globWitness` would answer `undecided`.
-
-## Plugins
-
-A plugin here is a spec-brief plugin, a module this tool loads, not a Claude Code plugin. It exports `{ name, rules }`, or a function of its configured options that returns one. Its rules run beside the built-in ones as `<name>/<rule>`, and configuration sets their severity like any other.
-
-```js
-// tools/departures.mjs
-export default (options) => ({
-  name: 'departures',
-  rules: [{
-    id: 'signed',
-    description: 'every departure is signed',
-    severity: 'error',
-    check: ({ brief }) => brief.text.includes(options.marker) ? [] : [{ line: 1, message: 'has an unsigned departure' }],
-  }],
-});
-```
-
-```json
-{ "plugins": [{ "module": "./tools/departures.mjs", "options": { "marker": "Signed-off-by" } }] }
-```
-
-A result is `{ line, message }`, with optional fields:
-
-| Field | What it is |
-| --- | --- |
-| `hint` | The next action. |
-| `severity` | Lower than the rule's, for this one finding. |
-| `subject` | What the finding is about, where the rule can report several in one brief; GitLab's fingerprint is built from it. |
-
-This is where integrations belong. A tool that defines a format - signed departures, recorded reproducers, a code graph's blast radius - is the one that can check it, and spec-brief carries no copy of formats it does not own. Loading a plugin runs its code, exactly as loading a linter configuration does.
-
-A path is relative to the root. A package is found from the root as an `import` there would find it, its `exports` read under the import conditions, so a plugin published as ESM only loads, and so does a subpath such as `@spec-family/spec-harness/spec-brief-plugin`.
-
-### Waiving a refusal
-
-A plugin may also export `waive`, which lets the archive accept a change its own check allows - spec-harness's spec-brief plugin verifies a signed ruling for a protected path, which spec-brief does not know how to read.
-
-```js
-export default () => ({
-  name: 'rulings',
-  rules: [],
-  // context: { root, brief: { id, file, text }, findings, base, commit }
-  waive: async ({ findings }) =>
-    findings
-      .filter((f) => f.rule === 'protected-file' && verifiedRulingCovers(f.path))
-      .map((f) => ({ rule: f.rule, path: f.path, reason: 'ruling R3, signed by alice, allows it' })),
-});
-```
-
-- `findings` are the archive's refusals, as a frozen copy: a hook reads them and cannot change them, and a write to them throws.
-- Two refusals can be waived, and no others: `protected-file`, one per file, which names its `path`; and `out-of-scope`, which refuses only under `--strict` and lists its `paths`.
-- A waiver matches one of the plan's own refusals by rule and path and turns it into a `waived` note naming the plugin, the rule, the path and the reason. A waiver for any other rule is ignored with a `waiver-ignored` warning.
-- The hook is asked only when the plan has a refusal it could lift.
-- A hook that returns nothing waives nothing. One that throws - a write to `findings` included - or answers in another shape stops the run with exit 2, as a plugin that fails to load does.
-
-## What it does not do
-
-- **No status file.** There is no `manifest.json` to keep in step. A brief and the directory it sits in are the record; `list --format json` is the index, computed when asked. A committed index is also the one file every round merging in parallel edits.
-- **No roadmap editing.** A roadmap is a document people write. spec-brief reports on briefs; it does not rewrite prose around them.
-- **No git writes.** It reads commits, diffs and the working tree, and leaves staging and committing to whoever does them.
-- **No labels as sections, yet.** Sections are headings. A repository that marks its sections with bold or bracketed labels instead, `**Your Mission:**` or `[STANDING DIRECTIVES]`, is not described by this version.
+- [The reference](docs/reference/README.md), shipped in the package: [the brief](docs/reference/brief.md), [commands](docs/reference/commands.md), [options and exit codes](docs/reference/options.md), [configuration](docs/reference/configuration.md), [rules](docs/reference/rules.md), [CI and output formats](docs/reference/formats.md), [the library](docs/reference/library.md) and [plugins](docs/reference/plugins.md).
+- The family's guides, in spec-core: the [tutorial](https://github.com/spec-family/spec-core/blob/main/docs/tutorial.md), [adopting the tools](https://github.com/spec-family/spec-core/blob/main/docs/adopting.md), and [concepts](https://github.com/spec-family/spec-core/blob/main/docs/concepts.md).
 
 ## Design
+
+CI's full mutation sweep scores 99.31% over 7,873 mutants on 7ea0af9 (run 42474303397), and a sweep under 97% fails ([ADR-0009](https://github.com/spec-family/spec-brief/blob/main/docs/adr/0009-mutation-testing.md)).
 
 The decisions and what they cost are in [`docs/adr/`](https://github.com/spec-family/spec-brief/blob/main/docs/adr/README.md). Working on spec-brief itself: [CONTRIBUTING.md](https://github.com/spec-family/spec-brief/blob/main/CONTRIBUTING.md); reporting a vulnerability: [SECURITY.md](https://github.com/spec-family/spec-brief/blob/main/SECURITY.md).
 

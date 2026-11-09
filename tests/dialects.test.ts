@@ -579,7 +579,7 @@ describe('collisions', () => {
 });
 
 describe('configuration', () => {
-  it('has the defaults the README documents', () => {
+  it('has the defaults the configuration page documents', () => {
     const section = (name: string, extra: Record<string, unknown> = {}) => ({ name, aliases: [], mustContain: [], checklist: false, optional: false, ...extra });
     expect(DEFAULT_CONFIG).toEqual({
       briefs: 'briefs',

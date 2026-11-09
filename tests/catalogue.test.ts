@@ -28,7 +28,7 @@ describe('the rule catalogue', () => {
     }
   });
 
-  it('gives each rule the default severity the README documents', () => {
+  it('gives each rule the default severity the rules page documents', () => {
     expect(Object.fromEntries([...RULES, ...COLLISION_RULES, ...ARCHIVE_RULES].map((r) => [r.id, r.severity]))).toEqual({
       'front-matter': 'error',
       field: 'error',
