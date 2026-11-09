@@ -249,7 +249,11 @@ new and none is gone. For 0.13.0 the sweep of 66c1010 (run 42415949108)
 read 99.31% over 7,872 and, for the core, 99.36% over 5,639. The claims a
 brief raises and the rows it awaits made 287 mutants and left none: mutant
 for mutant against the sweep of 8887b75 (run 41432023621), no survivor is
-new and none is gone, in either sweep.
+new and none is gone, in either sweep. For 0.13.1, which moved the README's
+reference to `docs/reference/` and changed documents and tests alone, the
+sweep of d7f50e4 (run 42573723681) read 99.31% over 7,873 and, for the
+core, 99.36% over 5,641, mutant for mutant as the sweep of 7ea0af9 (run
+42474303397), in either sweep.
 
 Reading them was a review again, and found what no test had:
 
