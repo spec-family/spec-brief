@@ -1,4 +1,4 @@
-import { relative } from 'node:path';
+import { statSync } from 'node:fs';
 
 import { defineConfig } from 'vitest/config';
 import type { TestSequencer, TestSpecification, Vitest } from 'vitest/node';
@@ -25,6 +25,8 @@ import type { TestSequencer, TestSpecification, Vitest } from 'vitest/node';
  * A file the worker has not run yet has no time to go by. It runs after
  * those that have, the smaller first, and has a time from then on. Each
  * suite is one project, so vitest's rules for several are not repeated.
+ * Vitest 5 asks its cache by a file's specification and keeps no sizes,
+ * reading one from the disk where a file has no time; so does this.
  *
  * The type alone is imported from `vitest/node`: four test files read
  * `vitest.core.config.ts`, which reads this file, and a class that extended
@@ -44,12 +46,11 @@ export class QuickestFirst implements TestSequencer {
   }
 
   async sort(files: TestSpecification[]): Promise<TestSpecification[]> {
-    const { cache, config } = this.#ctx;
+    const { cache } = this.#ctx;
     const rank = (file: TestSpecification): [number, number] => {
-      // The key vitest's own sequencer reads its cache by; a test holds the two together.
-      const key = `${file.project.name}:${relative(config.root, file.moduleId).replaceAll('\\', '/')}`;
-      const last = cache.getFileTestResults(key);
-      if (last === undefined) return [2, cache.getFileStats(key)?.size ?? 0];
+      // What vitest's own sequencer asks its cache; a test holds the two together.
+      const last = cache.getTestSpecificationResult(file);
+      if (last === undefined) return [2, statSync(file.moduleId, { throwIfNoEntry: false })?.size ?? 0];
       return [last.failed ? 0 : 1, last.duration];
     };
     const ranked = files.map((file) => ({ file, rank: rank(file) }));
