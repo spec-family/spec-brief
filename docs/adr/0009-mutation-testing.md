@@ -340,6 +340,8 @@ sweeps to that ADR's two conditions before merging. (Since 2026-10-14 the
 pull request runs both sweeps itself, and nothing is dispatched: amended
 that day, below.)
 
+*Lifted 2026-11-09*, by the amendment of that day, below: vitest is on 5.
+
 ## Amended 2026-10-11: a mutant's quickest test files first
 
 **Both sweeps run a mutant's test files quickest first.** Stryker's vitest
@@ -382,7 +384,9 @@ fails a test where the order would quietly have gone by size, and holds it
 to the two sweeps' suites and to no other run. That file reaches nothing
 under `src/` and is left out of both suites. No test left either run: the
 initial runs count 976 tests and 663, as before, and `npm test` runs as it
-did.
+did. *Amended 2026-11-09*: on vitest 5 the order asks the cache by a file's
+specification, reads a size from the disk, and keeps its own record of the
+file that failed last (the amendment of that day, below).
 
 **A hosted runner is one of several machines**, and a sweep's minutes say
 more about which one it drew than about the order: Stryker's initial run,
@@ -1323,3 +1327,139 @@ Seen on the way, and left:
   `retention-days` cannot change here. Two Mondays without a sweep of main
   that passes, and no push, would leave a pull request's comparison with
   nothing to compare with, and it would say so.
+
+## Amended 2026-11-09: vitest 5, and the order's own record
+
+**Vitest is on 5.** Stryker 10.1.0, of 2026-10-23, names
+[stryker-js #6214](https://github.com/stryker-mutator/stryker-js/issues/6214),
+"support vitest v5", in its notes, and 10.1.1 followed within the hour. Its
+vitest runner joins a test's name with ` > ` where it finds vitest 5 or
+later, which is what #6210 asked for. Dependabot brought both packages to
+10.1.1 here on 2026-11-08, and spec-core took vitest 5 on them the same
+day, its sweep reading as main's (its pull request 57,
+[ADR-0008](https://github.com/spec-family/spec-core/blob/main/docs/adr/0008-toolchain.md)
+amended 2026-11-08). This is step 4 of that ADR's "Lifting it" here:
+`vitest` and `@vitest/coverage-v8` to 5.0.5, the version spec-core runs,
+and both Stryker packages asked for at `^10.1.1`, the first runner that
+reads vitest 5. The hold went in the same change: the test in
+`tests/source.test.ts` that failed a vitest that is not a 4, and the two
+vitest entries under `ignore` in `.github/dependabot.yml`. Nothing under
+`src/` changed.
+
+**Three tests changed with vitest**, all in `tests/mutation-order.test.ts`,
+the three spec-core's pull request changed, each on a change of vitest's
+own:
+
+- A sequencer asks vitest's cache by a file's specification,
+  `getTestSpecificationResult`, and the cache keeps no sizes: vitest's own
+  sequencer reads a file's size from the disk where the file has no time.
+  `getFileTestResults` and `getFileStats` remain, deprecated, and warn.
+  `QuickestFirst` asks what vitest's sequencer asks and reads a size as it
+  does, the smaller first as before. The test gives both sequencers files
+  of the sizes it names, in a temporary folder, and a cache that answers
+  only the new question; the part of it that held a project's name in the
+  cache's key went, since vitest reads the key off the specification.
+- `resolveConfig` returns Vite's resolved configuration, with vitest's
+  under `test`, where vitest 4 returned `{ vitestConfig }`.
+- The reporters a suite that names none is given are decided when vitest is
+  first imported, so the test resolves each suite from its configuration
+  file in a process started with `GITHUB_ACTIONS` set, where it had stubbed
+  the variable in its own.
+
+**The order keeps its own record of the file that failed last.** Vitest 5
+counts a run that a test name pattern narrows, or that stops at its first
+failure, as partial; its cache keeps a failure from such a run until a run
+of the whole file passes, and reads back what the other workers write to
+the same file (`ResultsCache.update` and `isPartialRun`). Stryker narrows
+every mutant's run so, and stops it at the first failure, so in a sweep a
+file that killed one mutant in any worker stays first for every mutant
+after it, where vitest 4 put it first only after the run it failed in.
+spec-core measured that on its main and gave its order a record of its own
+(its pull request 67; its ADR-0007 and ADR-0008, amended 2026-11-09), which
+is copied here whole. In `vitest.mutation.config.ts` a map, `failedLast`,
+holds each file's verdict, and a reporter, `lastRun`, sets it at the file's
+end (`onTestModuleEnd`) when the file passed or failed, and leaves a file
+the run skipped or did not reach as it was: vitest 4's rule. `QuickestFirst`
+ranks a file by it where it read the cache's `failed`, and both sweeps'
+suites name `lastRun` after `'default'`, `vitest.core.config.ts` taking it
+from the same file as the order. The times stay the cache's, on vitest 5
+each whole file's from the dry run; in spec-core a record of each run's
+time as well read no better. The reporter has no `onInit`: vitest 5 calls
+it at the start of every run, and in spec-core one that cleared the record
+sorted every run with the record empty.
+
+`tests/mutation-order.test.ts` holds the record with unit tests, each in a
+folder of its own, since the record is the module's, and, for each sweep's
+configuration, with a test that drives vitest as Stryker's runner does:
+five runs of two files narrowed by test name patterns, in a process of its
+own, taking the order the sequencer gives inside each run, which is where a
+record emptied at the start of a run shows. It asserts too that vitest 5's
+cache keeps the failure after a narrowed run in which the file passed;
+when a vitest release fails that, its cache forgets a failure as vitest 4's
+did, and the record may go, by the rule spec-core's ADR-0008 gives. Eight
+breaks made by hand each fail a test: an emptying `onInit`, the cache's
+`failed` read alone or beside the record, the verdict of a file a run
+skipped taken, the core suite without the reporter, a size read larger
+first or not at all, and the cache asked by key.
+
+**What both sweeps read.** The pull request's sweeps, run 42608942061 of
+its first push, beside main's four newest, all on vitest 4.1.12: the
+schedule's and the push's of e7521fe, d7f50e4's and 7ea0af9's, over one
+source and one suite. "Tests to a kill" is the mean of `testsCompleted`
+over the killed mutants, then over those that are not static, and the
+static ones' tests in all, as spec-core's ADR-0008 reads them; "untested"
+counts the mutants that survived with a test covering them and no test
+run, `status === "Survived" && coveredBy.length > 0 && !(testsCompleted > 0)`.
+A sweep is set beside its own initial run, as above, since a hosted runner
+is one of several machines.
+
+| Full sweep | Run | Score | Killed | Timed out | Survived | No coverage | Runtime error | Untested | Tests to a kill | Not static | Static, in all | Sweep | Initial run | Sweep / initial run |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 7ea0af9 | 42474303397 | 99.31% | 7,777 | 42 | 51 | 3 | 1 | 0 | 12.31 | 4.93 | 61,165 | 28m30s | 11.2 s | 152.4 |
+| d7f50e4 | 42573723681 | 99.31% | 7,778 | 41 | 51 | 3 | 1 | 0 | 10.96 | 5.22 | 48,687 | 18m56s | 9.1 s | 125.3 |
+| e7521fe, push | 42582544857 | 99.31% | 7,776 | 43 | 51 | 3 | 1 | 0 | 11.08 | 5.33 | 48,780 | 29m36s | 11.6 s | 153.3 |
+| e7521fe, schedule | 42607422533 | 99.31% | 7,778 | 41 | 51 | 3 | 1 | 0 | 12.26 | 5.03 | 60,123 | 18m30s | 7.7 s | 144.9 |
+| vitest 5, this change | 42608942061 | 99.31% | 7,779 | 40 | 51 | 3 | 1 | 0 | 12.44 | 4.93 | 62,169 | 20m50s | 9.7 s | 128.2 |
+
+| Core sweep | Run | Score | Killed | Timed out | Survived | No coverage | Runtime error | Untested | Tests to a kill | Not static | Static, in all | Sweep | Initial run | Sweep / initial run |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 7ea0af9 | 42474303397 | 99.36% | 5,574 | 31 | 33 | 3 | 0 | 0 | 9.63 | 4.69 | 30,480 | 9m27s | 2.9 s | 197.5 |
+| d7f50e4 | 42573723681 | 99.36% | 5,574 | 31 | 33 | 3 | 0 | 0 | 9.39 | 4.67 | 29,258 | 16m13s | 4.9 s | 197.8 |
+| e7521fe, push | 42582544857 | 99.36% | 5,573 | 32 | 33 | 3 | 0 | 0 | 9.71 | 4.72 | 30,785 | 16m33s | 4.8 s | 204.8 |
+| e7521fe, schedule | 42607422533 | 99.36% | 5,573 | 32 | 33 | 3 | 0 | 0 | 8.98 | 4.88 | 25,908 | 16m14s | 4.8 s | 202.3 |
+| vitest 5, this change | 42608942061 | 99.36% | 5,573 | 32 | 33 | 3 | 0 | 0 | 9.99 | 4.70 | 32,412 | 14m55s | 4.9 s | 181.4 |
+
+The full sweep reads 99.31% over 7,873 mutants and the core 99.36% over
+5,641, as main's do, and spec-core's ADR-0008 asks of the change three
+things, each of which holds:
+
+- **The score** is main's to the hundredth in both, within the half point
+  that ADR allows.
+- **No mutant survived covered and untested**, in either sweep: the runner
+  ran its tests against every mutant a test covers.
+- **The mutants that are not static** ran 4.93 tests to a kill in the full
+  sweep and 4.70 in the core, inside main's 4.93 to 5.33 and 4.67 to 4.88:
+  the file that killed the last mutant runs first again, as on vitest 4.
+
+Mutant by mutant, against main's newest sweep, the schedule's: each job's
+comparison named no undetected mutant new and none gone, the same 54 in the
+full sweep and 36 in the core. Every one of the core's 5,641 verdicts is
+main's. In the full sweep one of 7,873 differs, `src/fs.ts` 169, a block
+made empty, which timed out on main and was killed here by its second
+test; between the push's sweep of e7521fe and the schedule's, of the same
+commit, two differ. The one runtime error is main's: `src/git.ts` 82, a
+string made empty, crashes the runner in every sweep of the four as here.
+Each initial run counts the tests it did, 1,107 and 694: no test left or
+joined either suite.
+
+The static mutants ran 62,169 tests before their kills in the full sweep,
+against 48,687 to 61,165 on main, and 32,412 in the core, against 25,908
+to 30,785: two and five in a hundred above main's highest. Their order
+after the file that failed last is the times', which on vitest 5 are each
+whole file's from the dry run, and in spec-core they stayed above vitest
+4's, with a record of times as without it, for a reason not yet explained
+(its ADR-0007). Here the gap is a fraction of spec-core's, which read about
+twice its vitest 4 sweeps', and of the same sign. The sweeps took 20m50s
+and 14m55s, 128.2 and 181.4 seconds for each second of their initial
+runs, where main's read 125.3 to 153.3 and 197.5 to 204.8: inside the
+spread of the runners main drew, and not slower.

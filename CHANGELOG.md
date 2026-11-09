@@ -11,6 +11,33 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
+## Unreleased
+
+The tests run on vitest 5. Nothing spec-brief checks, prints or exits with
+changes, nothing in the package does, and no release is needed for it.
+
+### Development
+
+- **Vitest 5, and the hold on 4 lifted.** `vitest` and
+  `@vitest/coverage-v8` go to 5.0.5, the version spec-core runs, and both
+  Stryker packages are asked for at `^10.1.1`, whose vitest runner reads
+  vitest 5's test names
+  ([stryker-js #6210](https://github.com/stryker-mutator/stryker-js/issues/6210)).
+  Dependabot may propose a vitest major again, and `tests/source.test.ts`
+  no longer fails one. Three tests of the sweeps' order and reporters
+  follow vitest 5's own changes. Both sweeps of the change read as main's:
+  99.31% over 7,873 mutants in full and 99.36% over 5,641 in the core, the
+  same undetected mutants, none survived covered and untested (ADR-0009,
+  amended 2026-11-09).
+- **The mutation sweeps again run first the test file that failed when the
+  worker last ran it, as they did on vitest 4.** Vitest 5's cache keeps a
+  failure from a run narrowed by a test name pattern until a run of the
+  whole file passes, and shares it between Stryker's workers. The order in
+  `vitest.mutation.config.ts` keeps its own record of each file's verdict
+  now, by a reporter, `lastRun`, named in both sweeps' suites, as spec-core
+  does. The mutants that are not static ran 4.93 tests to a kill in the
+  full sweep and 4.70 in the core, inside main's range on vitest 4.
+
 ## 0.13.1
 
 The README is a front page, and the reference ships in the package, in
