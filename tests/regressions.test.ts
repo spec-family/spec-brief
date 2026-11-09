@@ -117,7 +117,7 @@ describe('regressions', () => {
     expect(archived.startsWith('---\nintegrity: sha256-')).toBe(true);
     expect(back).toBe(bare);
     // A block the brief had empty reads the same once the hash is in it, and
-    // goes with it: the exception the README names.
+    // goes with it: the exception the reference names under unarchive.
     expect(roundTrip({ [A]: `---\n---\n${bare}` }, cfg).back).toBe(bare);
     // A block that holds anything else stays.
     const commented = `---\n# kept\n---\n${bare}`;

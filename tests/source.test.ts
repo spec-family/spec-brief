@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import { releaseOf } from '../scripts/release.js';
 import { HELP } from '../src/cli.js';
-import { initialConfig } from '../src/config.js';
+import { initialConfig, resolveConfig } from '../src/config.js';
 import { matchGlob, parseGlob } from '../src/glob.js';
 import { dirOf, isRelativeTarget, resolveFrom, splitTarget } from '../src/links.js';
 import { ARCHIVE_RULES, COLLISION_RULES, RULES } from '../src/rules.js';
@@ -196,23 +196,69 @@ describe('the test that loads `literal` alone', () => {
 
 describe('the documents', () => {
   const readme = readFileSync('README.md', 'utf8');
+  // The README is the front page; the reference, which the package ships, is
+  // where every command, option, key and rule is written out in full.
+  const pages = readdirSync('docs/reference')
+    .filter((name) => name.endsWith('.md'))
+    .sort()
+    .map((name) => `docs/reference/${name}`);
+  const page = (name: string): string => readFileSync(`docs/reference/${name}`, 'utf8');
+  const rules = [...RULES, ...COLLISION_RULES, ...ARCHIVE_RULES];
 
-  it('the README names every rule, and no rule that does not exist', () => {
-    const ids = [...RULES, ...COLLISION_RULES, ...ARCHIVE_RULES].map((r) => r.id);
-    const missing = ids.filter((id) => !readme.includes(`\`${id}\``));
-    expect(missing).toEqual([]);
-    const table = readme.slice(readme.indexOf('<!-- rules:start -->'), readme.indexOf('<!-- rules:end -->'));
-    const named = [...table.matchAll(/^\| `([a-z-]+)` \|/gm)].map((m) => m[1] as string);
-    expect(named.sort()).toEqual([...ids].sort());
+  it('the rules page names every rule with the severity it has by default, and no rule that does not exist', () => {
+    const text = page('rules.md');
+    const table = text.slice(text.indexOf('<!-- rules:start -->'), text.indexOf('<!-- rules:end -->'));
+    const rows = [...table.matchAll(/^\| `([a-z-]+)` \| ([a-z]+) \|/gm)].map((m) => [m[1] as string, m[2] as string] as const);
+    expect(rows.map(([id]) => id).sort()).toEqual(rules.map((r) => r.id).sort());
+    expect(Object.fromEntries(rows)).toEqual(Object.fromEntries(rules.map((r) => [r.id, r.severity])));
   });
 
-  it('the README names every command and option the CLI accepts', () => {
+  it('the README names every rule at a glance, each once, and no rule that does not exist', () => {
+    const section = /^## Checks$([\s\S]*?)^## /m.exec(readme)?.[1] ?? '';
+    const named = [...section.matchAll(/^\| [^|]+ \| (`[a-z-]+`(?:, `[a-z-]+`)*) \|$/gm)].flatMap((m) => (m[1] as string).split(', ').map((id) => id.slice(1, -1)));
+    expect(named.sort()).toEqual(rules.map((r) => r.id).sort());
+  });
+
+  it('the reference names every command and option the CLI accepts, and the README every command', () => {
+    const reference = page('commands.md') + page('options.md');
     const options = [...HELP.matchAll(/--([a-z-]+)/g)].map((m) => `--${m[1] as string}`);
-    const missing = [...new Set(options)].filter((o) => !readme.includes(o));
+    const missing = [...new Set(options)].filter((o) => !reference.includes(o));
     expect(missing).toEqual([]);
     for (const command of ['init', 'new', 'lint', 'list', 'matrix', 'schedule', 'archive', 'unarchive']) {
-      expect(readme.includes(`spec-brief ${command}`), command).toBe(true);
+      expect(new RegExp(`^## \`spec-brief ${command}[ \`]`, 'm').test(page('commands.md')), command).toBe(true);
+      expect(readme.includes(`| \`spec-brief ${command}`), command).toBe(true);
     }
+  });
+
+  it('every configuration the documents show loads', () => {
+    // A JSON block that parses whole is a configuration, and one that does
+    // not is the excerpt of list's JSON, which names its key.
+    const shown: string[] = [];
+    for (const document of ['README.md', ...pages]) {
+      for (const block of readFileSync(document, 'utf8').matchAll(/^```json\n([\s\S]*?)^```$/gm)) {
+        const text = block[1] as string;
+        let raw: unknown;
+        try {
+          raw = JSON.parse(text);
+        } catch {
+          expect(text.startsWith('"inputs": {'), `${document}: ${text}`).toBe(true);
+          continue;
+        }
+        expect(() => resolveConfig(raw, document), `${document}: ${text}`).not.toThrow();
+        shown.push(document);
+      }
+    }
+    expect(shown).toEqual(expect.arrayContaining(['README.md', 'docs/reference/configuration.md', 'docs/reference/brief.md', 'docs/reference/plugins.md']));
+  });
+
+  it('the README states the full sweep it measured, and the break both sweeps hold', () => {
+    // As a reader sees it: a sentence is one line, wherever the file wraps it.
+    const stated = /CI's full mutation sweep scores (\d+\.\d\d)% over \d{1,3}(?:,\d{3})* mutants on [0-9a-f]{7,40} \(run \d+\), and a sweep under (\d+)% fails/.exec(readme.replace(/\s+/g, ' '));
+    expect(stated).not.toBeNull();
+    const [score, floor] = [Number(stated?.[1]), Number(stated?.[2])];
+    expect(floor).toBe(stryker.thresholds?.break);
+    expect(floor).toBe(strykerCore.thresholds?.break);
+    expect(score).toBeGreaterThanOrEqual(floor);
   });
 
   it('the changelog counts the rules there are', () => {
@@ -229,7 +275,7 @@ describe('the documents', () => {
     expect(releaseOf(`v${version}`, version, readFileSync('CHANGELOG.md', 'utf8'))).toMatchObject({ version });
   });
 
-  it('the documents the package ships link only to files it ships, or by URL to a file the repository holds', () => {
+  it('the documents the package ships link only to files it ships, or by URL to a file the repository holds, and a fragment to a heading there', () => {
     // npm ships what `files` names, so a relative link to anything else is
     // dead on npmjs.com and in node_modules; such a file is linked on GitHub.
     const { files } = JSON.parse(readFileSync('package.json', 'utf8')) as { files: string[] };
@@ -237,20 +283,30 @@ describe('the documents', () => {
     // depth, and `README.md` packed spec-core's vendored README beside it.
     const ships = (path: string): boolean => files.some((entry) => path === entry.replace(/^\//, '') || path.startsWith(`${entry}/`));
     const documents = everything.filter((path) => path.endsWith('.md') && ships(path));
-    expect(documents).toEqual(expect.arrayContaining(['README.md', 'CHANGELOG.md']));
+    expect(documents).toEqual(expect.arrayContaining(['README.md', 'CHANGELOG.md', ...pages]));
     expect(files).toContain('/README.md');
+    expect(files).toContain('docs/reference');
     expect(documents.filter((path) => path.startsWith('src/'))).toEqual([]);
     const REPOSITORY = 'https://github.com/spec-family/spec-brief/blob/main/';
+    // The README and the reference link into each other by heading, so a
+    // heading renamed, or a passage moved to another page, leaves a link
+    // that opens the page and finds nothing there.
+    const anchors = (document: string): readonly string[] => scanMarkdown(readFileSync(document, 'utf8')).headings.map((heading) => heading.anchor);
+    const headed = (document: string, suffix: string): boolean =>
+      !suffix.startsWith('#') || !document.endsWith('.md') || anchors(document).includes(decodeURIComponent(suffix.slice(1)));
     const dead: string[] = [];
     for (const document of documents) {
       for (const link of scanMarkdown(readFileSync(document, 'utf8')).links) {
         if (link.form !== 'inline' && link.form !== 'definition') continue;
-        const { path } = splitTarget(link.target);
+        const { path, suffix } = splitTarget(link.target);
         if (link.target.startsWith(REPOSITORY)) {
-          if (!everything.includes(path.slice(REPOSITORY.length))) dead.push(`${document}: ${link.target}`);
+          const held = path.slice(REPOSITORY.length);
+          if (!everything.includes(held) || !headed(held, suffix)) dead.push(`${document}: ${link.target}`);
+        } else if (link.target.startsWith('#')) {
+          if (!headed(document, suffix)) dead.push(`${document}: ${link.target}`);
         } else if (isRelativeTarget(link.target)) {
           const resolved = resolveFrom(dirOf(document), decodeURIComponent(path));
-          if (resolved === null || !ships(resolved) || !existsSync(resolved)) dead.push(`${document}: ${link.target}`);
+          if (resolved === null || !ships(resolved) || !existsSync(resolved) || !headed(resolved, suffix)) dead.push(`${document}: ${link.target}`);
         }
       }
     }

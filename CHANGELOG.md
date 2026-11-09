@@ -11,6 +11,21 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
+## Unreleased
+
+### Documentation
+
+- **The README is a front page**: what spec-brief is, a quick start with
+  the output it prints, the commands, exit codes and checks at a glance, a
+  minimal configuration, a CI job, the score of main's newest full
+  mutation sweep, and links to the reference and to spec-core's guides.
+- **The reference ships in the package**, in `docs/reference/`: the brief,
+  the commands, options and exit codes, the configuration, the rules, CI
+  and the output formats, the library and plugins - everything the README
+  held, linked from it relatively, so the copy in `node_modules` describes
+  the version installed. The links in this changelog to passages of the
+  README point at their pages there.
+
 ## 0.13.0
 
 A brief names the claims its round raises and the register rows it waits
@@ -86,7 +101,7 @@ opened.
   directory or a socket ended the run on Node's error and a stack. Each is
   now exit 2 with one line before it is opened, nothing written, as a
   configuration has been since 0.10.0. A link is read as what it names
-  ([An input that names nothing](README.md#an-input-that-names-nothing);
+  ([An input that names nothing](docs/reference/options.md#an-input-that-names-nothing);
   ADR-0003, amended 2026-10-24). Upgrading: nothing to change where each is
   a file, or a link to one; a template that is a link to `/dev/null` now
   refuses, so point `template` at a file, or set it to `null`.
@@ -109,7 +124,7 @@ under its name was read without end.
   `--root C:\x` beside `--root c:\x`, and two `--config` values the same
   way, were refused as two directories; each is taken once. The rest of a
   path is compared as it resolves, so `C:\x` beside `C:\X` is still two
-  ([An option given two values](README.md#an-option-given-two-values);
+  ([An option given two values](docs/reference/options.md#an-option-given-two-values);
   [the family contract](https://github.com/spec-family/spec-core/blob/main/docs/adr/0005-the-family-contract.md),
   amended 2026-10-19).
 - **A revision written two ways is asked of git.** `--commit HEAD` beside
@@ -135,7 +150,7 @@ under its name was read without end.
   read them. `keep` is `false`, and nothing is listed, wherever that
   cannot be named whole: a run that starts below its configuration's
   directory, and one with no configuration file
-  ([`spec-brief list`](README.md#spec-brief-list); ADR-0002, amended
+  ([`spec-brief list`](docs/reference/commands.md#spec-brief-list); ADR-0002, amended
   2026-10-19). `schemaVersion` stays 2, since a field is added and none
   changes. `list` asks git nothing where a configuration file names the
   root, which is a process fewer.
@@ -148,7 +163,7 @@ under its name was read without end.
   stack, and `--config /dev/zero` on `RangeError`. Each is now exit 2 with
   one line, `is neither a file nor a directory, not a configuration file`,
   before it is opened, as a directory was already. A link is read as what
-  it names ([An input that names nothing](README.md#an-input-that-names-nothing);
+  it names ([An input that names nothing](docs/reference/options.md#an-input-that-names-nothing);
   ADR-0003, amended 2026-10-19). Upgrading: nothing to change for a
   configuration that is a file; `--config <(...)`, which a shell hands as a
   pipe, ran in `/dev/fd` and found no briefs, and now says what it was
@@ -170,7 +185,7 @@ holds is refused with `--help` or `--version` on it, and `--help` beside
   they were written, and writes nothing. Two values are compared as each is
   read, so one value written two ways is taken once: `--root .` beside
   `--root ./`, `--wave 1` beside `--wave 01`
-  ([An option given two values](README.md#an-option-given-two-values);
+  ([An option given two values](docs/reference/options.md#an-option-given-two-values);
   [the family contract](https://github.com/spec-family/spec-core/blob/main/docs/adr/0005-the-family-contract.md),
   amended 2026-10-18). Upgrading: give each option once; a shell alias or
   a script that gives an option, and a line that gives it again to override
@@ -186,7 +201,7 @@ holds is refused with `--help` or `--version` on it, and `--help` beside
   value. What only the tree can refuse, such as a `--root` that is not
   there, is still answered by `--help` and `--version`, and so is a
   command without its argument, `new --help`
-  ([The help on a wrong line](README.md#the-help-on-a-wrong-line)).
+  ([The help on a wrong line](docs/reference/options.md#the-help-on-a-wrong-line)).
   Upgrading: take the wrong part off a line that asks for the help or the
   version.
 - **`--help` beside `--version` is refused**, in either order and by
@@ -213,7 +228,7 @@ does is still taken. And `FORCE_COLOR=false` turns colour off.
   leave out what it never does is still taken, since it asks for what is
   already so: `--no-color` by every command, and `--no-git` and
   `--no-config` by `init` (ADR-0001,
-  [An option a command does not read](README.md#an-option-a-command-does-not-read)).
+  [An option a command does not read](docs/reference/options.md#an-option-a-command-does-not-read)).
   Upgrading: drop the option from that command's line; `init` writes
   `.spec-brief.json` and no other file, so a configuration kept under
   another name is renamed after it.
@@ -246,7 +261,7 @@ that names no brief or has a place that names none.
   empty one for no value at all, wrote the clock's date and exited 0. Each
   now writes nothing and ends with exit 2 and a line that names the variable
   and shows what it holds, and `today()` from the package throws for them
-  (ADR-0004, [Today's date](README.md#todays-date)).
+  (ADR-0004, [Today's date](docs/reference/options.md#todays-date)).
   Upgrading: set it to whole seconds in digits alone, as `date +%s` prints
   them, no more than `253402300799` (9999-12-31), or pass `--date`, or leave
   it unset; set and empty is not unset.
@@ -257,7 +272,7 @@ that names no brief or has a place that names none.
   made a directory named with a space. Every option that takes a value now
   ends the run with exit 2 and `--id is "", which is no value` for one that
   is empty or only space, nothing written; the ones refused already say the
-  same line (ADR-0001, [An input that names nothing](README.md#an-input-that-names-nothing)).
+  same line (ADR-0001, [An input that names nothing](docs/reference/options.md#an-input-that-names-nothing)).
   Upgrading: where a script may hand an option nothing, leave the option
   out, as `${ID:+--id "$ID"}` does in a shell.
 - **`new --depends-on` refuses a list that names no brief, and a place in

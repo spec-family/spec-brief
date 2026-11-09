@@ -57,8 +57,9 @@ files -> brief.ts -> corpus.ts -> rules.ts / collisions.ts / schedule.ts / archi
 ## Adding a rule
 
 Add it to `RULES` in `src/rules.ts` with an id, a default severity and a
-description, add a row to the table between the markers in `README.md`
-(a test checks the two agree), and add a test for the case that fires and the
+description, add a row to the table between the markers in
+`docs/reference/rules.md` and its id to the README's "Checks" table (a test
+checks all three agree), and add a test for the case that fires and the
 case that must not.
 
 ## A pull request and the sweeps

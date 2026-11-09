@@ -3,7 +3,7 @@ status: active
 date: 2026-09-24
 type: feature
 wave: 1
-affectedFiles: [src/markdown.ts, src/brief.ts, src/rules.ts, src/config.ts, schema.json, tests/**, README.md, docs/adr/**]
+affectedFiles: [src/markdown.ts, src/brief.ts, src/rules.ts, src/config.ts, schema.json, tests/**, README.md, docs/reference/**, docs/adr/**]
 protectedFiles: [src/glob.ts, src/apply.ts, src/archive.ts]
 ---
 

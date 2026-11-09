@@ -508,7 +508,7 @@ describe('an option that would tell someone what is not so', () => {
   // never does, `init --no-git`, asks for what is already so, and is taken.
   const OFFERED = ['root', 'config', 'no-config', 'format', 'strict', 'no-git', 'color', 'no-color'] as const;
 
-  /** The table in the README: what each command refuses, and in its refusal what it reads and what it takes besides. */
+  /** The table in the options page of the reference: what each command refuses, and in its refusal what it reads and what it takes besides. */
   const COMMANDS: Record<string, { line: string[]; refuses: readonly string[]; reads: string }> = {
     init: { line: ['init'], refuses: ['config', 'strict', 'color'], reads: '--root, --format, --briefs and --archive, and takes --no-config, --no-git and --no-color' },
     new: {

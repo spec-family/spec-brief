@@ -38,6 +38,7 @@
     "/README.md",
     "bin",
     "dist",
+    "docs/reference",
     "schema.json",
     "src/vendor/spec-core/LICENSE"
   ],
