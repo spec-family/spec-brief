@@ -89,10 +89,13 @@ and nothing else under `src/` for that reason, which `tests/source.test.ts`
 holds, and `tests/catalogue.test.ts` imports the CLI inside a test
 (ADR-0009, amended 2026-10-12).
 
-Vitest stays on 4 while Stryker's runner runs no test against a mutant on 5,
-where a sweep reads 4%: Dependabot proposes no major of it,
-`tests/source.test.ts` fails one made by hand, and ADR-0009 has the reason
-and where the steps that lift the hold are.
+Vitest is on 5 here since 2026-11-09, when Stryker 10.1's runner read its
+test names and both sweeps of the change read as main's; ADR-0009 has the
+measurement. Vitest 5's cache keeps a failure from a narrowed run, so the
+order keeps its own record of the file that failed last, by a reporter,
+`lastRun`, named in both sweeps' suites. It has no `onInit`: vitest 5 calls
+that at the start of every run, and it would empty the record before each
+sort.
 
 Run a tool through `npm run <script>` or `npx --no-install <tool>`, never a
 bare `npx <name>`: before `npm ci` that fetches whatever the registry has

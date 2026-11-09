@@ -41,3 +41,11 @@ commit.
 it waits for: on vitest 5 Stryker's runner measures nothing, and vitest is
 held on 4 until a released runner reads it
 ([ADR-0009](0009-mutation-testing.md), amended the same day).
+
+*Amended 2026-11-09.* The hold is lifted. Stryker 10.1.1's vitest runner
+reads vitest 5's test names, and spec-core took vitest 5 on it first (its
+ADR-0008, amended 2026-11-08). Vitest and `@vitest/coverage-v8` are pinned
+at `^5.0.5`, the version spec-core runs, where 5.1.0 was a week old, and
+both Stryker packages at `^10.1.1`, the first runner that reads vitest 5;
+the table above keeps the pins this was decided with. ADR-0009, amended the
+same day, has what both sweeps of the change read.
