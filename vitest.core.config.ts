@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitest/config';
 
-import { QuickestFirst } from './vitest.mutation.config.js';
+import { lastRun, QuickestFirst } from './vitest.mutation.config.js';
 
 /**
  * The unit suite: every test that reads no disk and spawns no process.
@@ -43,7 +43,8 @@ export default defineConfig({
     environment: 'node',
     testTimeout: 30_000,
     sequence: { sequencer: QuickestFirst },
-    // Named, for the reason `vitest.mutation.config.ts` gives.
-    reporters: ['default'],
+    // Named, for the reason `vitest.mutation.config.ts` gives, with the
+    // reporter that keeps the order's record.
+    reporters: ['default', lastRun],
   },
 });
