@@ -13,10 +13,21 @@ what a run reports.
 
 ## Unreleased
 
+`--format github` annotates a note only under `--verbose`, which is new.
 The tests run on vitest 5, and the vendored spec-core is at 92e46d4.
-Nothing spec-brief checks, prints or exits with changes.
 
 ### Changed
+
+- **`--format github` writes a note only under `--verbose`.** A note is
+  what a round expects: `glob-matches-nothing` names a file in a brief's
+  `affectedFiles` that the round has not created yet, and as a `::notice` it
+  stood on every pull request of a repository with an active brief, two on
+  each in spec-family/example. `lint`, `matrix` and `schedule` take
+  `--verbose`, which annotates notes as before. The `pretty`, `json`,
+  `sarif` and `gitlab` formats write every note, with the option or without
+  it, a note fails no run, and no exit code changes: a run without the
+  option reports less
+  ([CI and output formats](docs/reference/formats.md#github)).
 
 - **The vendored spec-core is at 92e46d4**, whose `markdown/links.ts`,
   `markdown/scan.ts` and `text/lines.ts` write out the equivalent mutants a

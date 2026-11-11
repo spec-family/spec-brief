@@ -148,7 +148,7 @@ After the job has installed the project, with `npm ci`:
 - run: npx --no-install @spec-family/spec-brief schedule --format github
 ```
 
-Each gives `npx` the package's [full name](#names) and `--no-install`: a job that lost its install step then stops, where the command's name alone would fetch whatever package has that name. [CI and output formats](docs/reference/formats.md) has GitLab's job, and the `sarif`, `gitlab` and `json` formats.
+Each gives `npx` the package's [full name](#names) and `--no-install`: a job that lost its install step then stops, where the command's name alone would fetch whatever package has that name. A note, such as a file the round has not created yet, is annotated only under `--verbose`. [CI and output formats](docs/reference/formats.md) has GitLab's job, and the `sarif`, `gitlab` and `json` formats.
 
 ## Documentation
 

@@ -57,7 +57,7 @@ spec-brief: init does not read --strict; it reads --root, --format, --briefs and
 
 - **Two options of which one would go unread** are refused together, for the same reason: `--config <file>` beside `--no-config` says the file was read, where the defaults ran and it was never opened, and `--color` beside `--no-color` that colour was forced on, where it was off. Give one of the two.
 - **An option that asks a command to leave out what it never does is taken**, since it asks for what is already so: `--no-color` by `init` and `new`, which print no colour, `--no-git` by `init`, which asks git nothing, and `--no-config` by `init`, which opens no configuration file. A script that runs every command in a tree without git, or into a log, passes such an option to each of them. `init --no-config` still writes over no configuration: where one is there, it stops as `init` does.
-- **An option a format has nothing to read for is taken**: `--no-color` or `--color` beside `--format json` changes nothing, and a caller that asks for JSON passes `--no-color` beside it.
+- **An option a format has nothing to read for is taken**: `--no-color` or `--color` beside `--format json` changes nothing, and a caller that asks for JSON passes `--no-color` beside it; nor does `--verbose` beside any format but `github`, since the others write every note.
 - **`--help` and `--version` are no way past a refusal**: `init --strict --help` is refused as `init --strict` is ([the help on a wrong line](#the-help-on-a-wrong-line)).
 
 ## An option given two values

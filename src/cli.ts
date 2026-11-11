@@ -114,10 +114,10 @@ const TABLE: Readonly<Record<string, CommandSpec>> = {
     },
     formats: ['pretty', 'json'],
   },
-  lint: { options: {}, formats: FORMATS },
+  lint: { options: { verbose: { type: 'boolean' } }, formats: FORMATS },
   list: { options: { ready: { type: 'boolean' }, archived: { type: 'boolean' } }, formats: ['pretty', 'json'], noArgument: '' },
-  matrix: { options: { 'all-waves': { type: 'boolean' } }, formats: FORMATS, noArgument: '' },
-  schedule: { options: { write: { type: 'boolean' } }, formats: FORMATS, noArgument: '' },
+  matrix: { options: { 'all-waves': { type: 'boolean' }, verbose: { type: 'boolean' } }, formats: FORMATS, noArgument: '' },
+  schedule: { options: { write: { type: 'boolean' }, verbose: { type: 'boolean' } }, formats: FORMATS, noArgument: '' },
   archive: {
     options: {
       pr: { type: 'string' },
@@ -404,6 +404,9 @@ new:
   --depends-on <ids>    comma-separated ids it runs after
   --date <YYYY-MM-DD>   the date in its front matter; default SOURCE_DATE_EPOCH's, or today's in UTC
 
+lint, matrix, schedule:
+  --verbose             annotate notes too with --format github; the other formats always write them
+
 list:
   --ready               only briefs that can run now: dependencies archived, not drafts or deferred
   --archived            include archived briefs
@@ -683,7 +686,11 @@ function emitFindings(run: Run, command: string, findings: readonly Finding[], c
       run.out(sarif(findings, run.version));
       break;
     case 'github':
-      run.out(githubCommands(findings));
+      // A note is what a round expects, as a file it has not written yet:
+      // annotated, it stood on every pull request of the round and taught
+      // reviewers to skip the annotations. It fails nothing, so leaving it
+      // out changes no exit code, and every other format still writes it.
+      run.out(githubCommands(flag(run.values, 'verbose') ? findings : findings.filter((f) => f.severity !== 'note')));
       break;
     case 'gitlab':
       run.out(gitlabCodeQuality(findings));
