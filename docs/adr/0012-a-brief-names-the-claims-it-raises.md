@@ -97,3 +97,30 @@ configuration describes.
   their length.
 - An archived brief's `raises` and `awaits` are a record, not a check: the
   freeze keeps them as they were when the round closed.
+
+## Amended 2026-11-11: the row as spec-graph reads it
+
+spec-graph reads the status of the same register rows, and the two tools
+could say different things of one row: spec-brief accepts any word as settled, and spec-graph
+0.24.1 read `decided`, the word this decision and its examples use, as an
+unknown phase. spec-graph reads `decided`, `settled` and `resolved` as `active`
+from its release after 0.24.1. Here, the
+reference says which words agree, and nothing is checked.
+
+- **A register spec-graph's configuration names** holds each row to that
+  register's `statuses`, and fails any other word
+  (`unknown-register-status`). A word in `settled` should be one of them.
+  It need not be one spec-graph marks `closes`: that says no work is left on
+  the row, and a round starts on a `decided` row whose work is the round's
+  own, as spec-graph's ADR-0027 example has `decided` without `closes`.
+- **A register it does not name** has each row read as a specification,
+  its status on spec-graph's lifecycle table. A word in `settled` should be
+  one the table reads as `active` or `frozen`. `closed` there is `retired`,
+  and a word it does not know leaves the row's phase unknown.
+
+**Alternatives.** A note for a word in `settled` that spec-graph would not
+read as settled: the table is spec-graph's, spec-core holds no copy of it,
+and a copy here would drift from it and be the thing that disagrees. The
+configured case needs no check from here, since spec-graph already fails
+the row. A shared list of settled words is the lifecycle table itself,
+which the reference links.

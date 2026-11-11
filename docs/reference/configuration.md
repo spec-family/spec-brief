@@ -25,7 +25,7 @@
 | `archiving.freeze` | `true` | Write an integrity hash, so a later edit is caught. |
 | `archiving.base` | `null` | Branch the diff is measured from, such as `"main"`. |
 | `claims.labels` | `{}` | Each label a claim is written with, and whether it says the work is `"done"` or `"open"`, for the claims a brief [raises](brief.md#claims-a-round-raises-rows-it-waits-on). |
-| `registers.settled` | `[]` | The statuses that settle a register row a brief [awaits](brief.md#claims-a-round-raises-rows-it-waits-on), compared without case by the word a status opens with. |
+| `registers.settled` | `[]` | The statuses that settle a register row a brief [awaits](brief.md#claims-a-round-raises-rows-it-waits-on), compared without case by the word a status opens with; words spec-graph reads as settled too, as the [brief](brief.md#claims-a-round-raises-rows-it-waits-on) says. |
 | `rules` | `{}` | Severity per rule: `off`, `note`, `warning` or `error`. |
 | `plugins` | `[]` | Modules that contribute rules: a path or package, or `{ module, options }`. |
 
