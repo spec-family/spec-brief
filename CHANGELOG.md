@@ -36,6 +36,14 @@ The tests run on vitest 5, and the vendored spec-core is at 92e46d4.
   bounds clamped by `Math.max` and `Math.min`. Each reads every document as
   before.
 
+### Documentation
+
+- **Which words in `registers.settled` spec-graph reads as settled too.**
+  In a register spec-graph's configuration names, words of its `statuses`,
+  `closes` or not; in one it does not, words its lifecycle table reads as
+  `active` or `frozen`. spec-brief checks neither, since the vocabulary is
+  spec-graph's (ADR-0012, amended 2026-11-11).
+
 ### Development
 
 - **Vitest 5, and the hold on 4 lifted.** `vitest` and

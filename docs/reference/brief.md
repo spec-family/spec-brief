@@ -59,6 +59,13 @@ awaits: [docs/decisions.md#refund-currency]
 }
 ```
 
+spec-graph reads the same rows by the same word, so name in `registers.settled` words it reads as settled too ([ADR-0012](https://github.com/spec-family/spec-brief/blob/main/docs/adr/0012-a-brief-names-the-claims-it-raises.md#amended-2026-11-11-the-row-as-spec-graph-reads-it)):
+
+- **In a register spec-graph's configuration names**, a word of that register's `statuses`: spec-graph fails a row whose status is any other, as `unknown-register-status` ([registers](https://github.com/spec-family/spec-graph/blob/main/docs/reference/registers.md)). The word need not be one with `closes`, which says no work is left on the row: a round starts on a `decided` row whose work is the round's own, and `done` closes it once the round is through.
+- **In a register it does not name**, each row is a specification, and a word its [lifecycle table](https://github.com/spec-family/spec-graph/blob/main/docs/reference/lifecycle.md) reads as `active` or `frozen`, such as `done`, `accepted` or `approved`, and `decided`, `settled` or `resolved` from the spec-graph release after 0.24.1. A word the table reads as `retired`, such as `closed`, or does not know, leaves the row retired or its phase unknown there, though it settles the row here.
+
+spec-brief checks neither: the vocabulary is spec-graph's and moves with it, and a copy here would be what disagrees.
+
 ## Scope patterns
 
 Scopes are globs in spec-core's `path` dialect, the one every spec-\* tool reads: `*`, `?`, `[a-z]` and `{a,b}` within a name, `**` for any number of directories, compared case-sensitively on every host. The rules:
