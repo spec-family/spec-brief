@@ -1205,6 +1205,33 @@ describe('lint', () => {
     expect(gitlab.map((i) => [i.check_name, i.severity, i.location])).toEqual([['unknown-type', 'major', { path: 'briefs/001_a.md', lines: { begin: 3 } }]]);
   });
 
+  it('annotates a note only under --verbose, which every other format writes, and exits alike either way', async () => {
+    // A file the round has not written yet is a note, and an unknown type an error.
+    const root = plain('cli-lint-notes', { 'briefs/001_a.md': goodBrief({ type: 'epic', affectedFiles: '[src/new.ts]' }) });
+    const quiet = await run(root, ['lint', '--format', 'github']);
+    expect(quiet.code).toBe(EXIT_FAILED);
+    expect(quiet.out.split('\n').map((line) => line.split(' ')[0])).toEqual(['::error', '']);
+    const verbose = await run(root, ['lint', '--verbose', '--format', 'github']);
+    expect({ code: verbose.code, err: verbose.err }).toEqual({ code: EXIT_FAILED, err: '' });
+    expect(verbose.out).toBe(`${quiet.out}::notice file=briefs/001_a.md,line=4,title=spec-brief glob-matches-nothing::"src/new.ts" in affectedFiles matches no file in the tree. expected when the round creates it; otherwise check the spelling\n`);
+    // Every other format keeps the note, with --verbose or without it.
+    for (const format of ['json', 'sarif', 'gitlab', 'pretty']) {
+      const written = await run(root, ['lint', '--format', format]);
+      expect(written.out, format).toContain('glob-matches-nothing');
+      expect(await run(root, ['lint', '--format', format, '--verbose']), format).toEqual(written);
+    }
+    // A note alone passes, written or not, and --strict does not make it fail.
+    const fine = plain('cli-lint-notes-only', { 'briefs/001_a.md': goodBrief({ affectedFiles: '[src/new.ts]' }) });
+    expect(await run(fine, ['lint', '--format', 'github', '--strict'])).toEqual({ code: EXIT_OK, out: '', err: '' });
+    expect((await run(fine, ['lint', '--format', 'github', '--verbose'])).code).toBe(EXIT_OK);
+    // matrix's note is held back alike.
+    const unscoped = plain('cli-matrix-notes', { 'briefs/001_a.md': goodBrief({ wave: '1' }), 'briefs/002_b.md': goodBrief({ wave: '1', affectedFiles: '[src/new.ts]' }) });
+    expect(await run(unscoped, ['matrix', '--format', 'github'])).toEqual({ code: EXIT_OK, out: '', err: '' });
+    expect((await run(unscoped, ['matrix', '--format', 'github', '--verbose'])).out).toMatch(/^::notice file=briefs\/001_a\.md,line=\d+,title=spec-brief unscoped::/);
+    // An option of the commands that write annotations, and of no other.
+    expect((await run(fine, ['list', '--verbose'])).code).toBe(EXIT_ERROR);
+  });
+
   it('colours a terminal, and follows NO_COLOR, FORCE_COLOR, a dumb terminal and the flags', async () => {
     const root = plain('cli-lint-color', { 'briefs/001_a.md': goodBrief({ type: 'epic' }) });
     const esc = String.fromCharCode(27);
@@ -1499,9 +1526,11 @@ describe('schedule', () => {
       '1 brief could move, and the declared waves hold; "spec-brief schedule --write" writes the computed ones',
       '',
     ]);
-    expect((await run(root, ['schedule', '--format', 'github'])).out.startsWith(
+    expect((await run(root, ['schedule', '--format', 'github', '--verbose'])).out.startsWith(
       '::notice file=briefs/002_b.md,line=3,title=spec-brief wave-schedule::declares wave 3, which holds; the schedule puts it in wave 2',
     )).toBe(true);
+    // A move that is the person's to keep is no annotation unless asked for.
+    expect(await run(root, ['schedule', '--format', 'github'])).toEqual({ code: EXIT_OK, out: '', err: '' });
     // A note is not a warning: --strict passes it too.
     expect((await run(root, ['schedule', '--strict'])).code).toBe(EXIT_OK);
     expect((await run(root, ['lint'])).code).toBe(EXIT_OK);

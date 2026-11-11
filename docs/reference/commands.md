@@ -14,6 +14,8 @@ Scaffolds a brief with the next free number - one more than the highest id, live
 
 Checks every brief, or the ones named. A draft (`status: draft`) gets its unwritten sections as warnings; an active brief gets them as errors. Archived briefs are frozen records: they are checked for identity and for the freeze, never against today's schema.
 
+`--verbose` has `--format github` annotate the notes too, as `matrix --verbose` and `schedule --verbose` do; every other format writes them without it ([GitHub](formats.md#github)).
+
 ```text
 briefs/035_the-background-side.md
     5  error    has no "Report" section  missing-section
@@ -123,7 +125,7 @@ A deferred brief, and one that waits on it, is placed nowhere; a dependency cycl
 - a comment after the old wave, `wave: 2  # after the review`, stays after the new one;
 - a brief whose lines end in both LF and CRLF is written with the ending of its first line throughout, as `archive` writes one.
 
-`--format json` gives an orchestrator the waves, each brief's declared and proposed wave with the reasons and whether the declared one holds, and what waits on what; `sarif`, `github` and `gitlab` carry a `wave-schedule` finding per move.
+`--format json` gives an orchestrator the waves, each brief's declared and proposed wave with the reasons and whether the declared one holds, and what waits on what; `sarif` and `gitlab` carry a `wave-schedule` finding per move, and `github` one per move that is an error, and each that is a note as well under `--verbose`.
 
 The result is the same every time for the same briefs. It is a valid schedule, not always the shortest: no fast method promises the fewest waves, and a person can always move a brief later by hand, which `lint` and `matrix` then check. So a move is an error only when the declared wave does not hold, or there is none: a declared wave that holds is the person's to keep, and its move is a note.
 
