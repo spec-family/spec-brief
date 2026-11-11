@@ -1,6 +1,6 @@
 {
   "name": "@spec-family/spec-brief",
-  "version": "0.13.1",
+  "version": "0.14.0",
   "description": "Lifecycle management for task briefs: lint the contract, map parallel collisions, and archive a round in one atomic command.",
   "keywords": [
     "agents",
@@ -74,7 +74,7 @@
   "bugs": {
     "url": "https://github.com/spec-family/spec-brief/issues"
   },
-  "homepage": "https://github.com/spec-family/spec-brief#readme",
+  "homepage": "https://spec-family.github.io",
   "overrides": {
     "qs": "^6.16.0"
   }

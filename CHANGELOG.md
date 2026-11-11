@@ -11,10 +11,13 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
-## Unreleased
+## 0.14.0
 
-`--format github` annotates a note only under `--verbose`, which is new.
-The tests run on vitest 5, and the vendored spec-core is at 92e46d4.
+`--format github` annotates a note only under `--verbose`, which is new,
+so a pull request no longer carries a notice for each file its round has
+yet to create. The copy of spec-core is at 92e46d4, the tests run on
+vitest 5, and the package's homepage on npm is the family's site,
+https://spec-family.github.io. No exit code and no JSON field changes.
 
 ### Changed
 
