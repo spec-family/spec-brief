@@ -253,7 +253,11 @@ new and none is gone, in either sweep. For 0.13.1, which moved the README's
 reference to `docs/reference/` and changed documents and tests alone, the
 sweep of d7f50e4 (run 42573723681) read 99.31% over 7,873 and, for the
 core, 99.36% over 5,641, mutant for mutant as the sweep of 7ea0af9 (run
-42474303397), in either sweep.
+42474303397), in either sweep. For 0.14.0, whose `--verbose` holds a note
+back from `--format github` and whose copy of spec-core moved to 92e46d4,
+the sweep of 8f00fd9 (run 43053437250) read 99.32% over 7,886 and, for the
+core, 99.36% over 5,641: mutant for mutant against the sweep of d7f50e4 (run
+42573723681), no survivor is new and none is gone, in either sweep.
 
 Reading them was a review again, and found what no test had:
 

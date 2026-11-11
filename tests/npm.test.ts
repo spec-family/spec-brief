@@ -113,14 +113,15 @@ describe('the package, installed by any npm from 10 to 12', () => {
   it('names the repository it is published from, which trusted publishing holds its provenance to', () => {
     // npm refuses a release whose provenance names a repository other than
     // the one `repository.url` gives, so a stale URL fails the release, not
-    // a test. The links a reader follows from npm go to the same place.
+    // a test. Its issues are filed there too; the homepage npm links is the
+    // family's site, which says what the four tools are for together.
     const { repository, homepage, bugs } = JSON.parse(read('package.json')) as {
       repository: { type: string; url: string };
       homepage: string;
       bugs: { url: string };
     };
     expect(repository).toEqual({ type: 'git', url: 'git+https://github.com/spec-family/spec-brief.git' });
-    expect(homepage).toBe('https://github.com/spec-family/spec-brief#readme');
+    expect(homepage).toBe('https://spec-family.github.io');
     expect(bugs).toEqual({ url: 'https://github.com/spec-family/spec-brief/issues' });
   });
 });
