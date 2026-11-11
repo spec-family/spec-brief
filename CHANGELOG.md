@@ -13,8 +13,17 @@ what a run reports.
 
 ## Unreleased
 
-The tests run on vitest 5. Nothing spec-brief checks, prints or exits with
-changes, nothing in the package does, and no release is needed for it.
+The tests run on vitest 5, and the vendored spec-core is at 92e46d4.
+Nothing spec-brief checks, prints or exits with changes.
+
+### Changed
+
+- **The vendored spec-core is at 92e46d4**, whose `markdown/links.ts`,
+  `markdown/scan.ts` and `text/lines.ts` write out the equivalent mutants a
+  clock decided (spec-core #63): loops that end where a `Math.min` reaches
+  their bound, the list items a line ends popped in one step, and line
+  bounds clamped by `Math.max` and `Math.min`. Each reads every document as
+  before.
 
 ### Development
 
