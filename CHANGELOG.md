@@ -103,6 +103,15 @@ what a run reports.
   under the line that named it, and the warnings apart, out of order.
 - **`list --ready` with briefs and none ready** says so, and that `list`
   shows what each waits on; it said there were no briefs.
+- **A worker of either mutation sweep that Stryker starts after a timeout
+  begins with the order's record the others left, as on vitest 4.** The
+  record of each test file's last verdict was kept in each worker's memory,
+  so a worker started in place of one that timed out began with none.
+  Static mutants run last, mostly on such workers. The workers of one sweep
+  now share the record through a file in Stryker's sandbox, read once when
+  a worker starts and written whole after each run, as spec-core's do
+  (ADR-0009, amended 2026-11-12). Development tooling only: nothing
+  spec-brief reports changed. Upgrading: nothing to do.
 
 ### Fixed
 

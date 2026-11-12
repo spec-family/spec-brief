@@ -1467,3 +1467,54 @@ twice its vitest 4 sweeps', and of the same sign. The sweeps took 20m50s
 and 14m55s, 128.2 and 181.4 seconds for each second of their initial
 runs, where main's read 125.3 to 153.3 and 197.5 to 204.8: inside the
 spread of the runners main drew, and not slower.
+
+## Amended 2026-11-12: the order's record, shared between a sweep's workers
+
+The reason the amendment before left unexplained is found. The record was
+kept in the worker's memory, so a worker Stryker starts in place of one
+that timed out began with none, where on vitest 4 it read the cache file
+every worker rewrote after each run. Static mutants run last, after the
+timeouts, so mostly on such workers. spec-core found it in an experiment
+and took the fix first (its
+[ADR-0007](https://github.com/spec-family/spec-core/blob/main/docs/adr/0007-verification.md),
+the entry of 2026-11-12, and
+[ADR-0008](https://github.com/spec-family/spec-core/blob/main/docs/adr/0008-toolchain.md),
+amended 2026-11-12): its static mutants' tests before their kills came to
+23,734 to 29,259 in main's seven sweeps with the record in memory alone,
+against 11,731 to 17,936 on vitest 4, and with the record shared 17,664 in
+its experiment and 17,621 in the sweep of its pull request, spec-core#77.
+
+**What changed.** `vitest.mutation.config.ts` shares the record as
+spec-core's does: where the process is one of Stryker's workers
+(`STRYKER_MUTATOR_WORKER`), through `.vitest-order-record.json` in the
+folder it runs in, the sweep's sandbox, read once when the worker loads
+the configuration and written whole after each run, through a file of the
+process's own renamed over it. A process that is not a worker reads and
+writes none. Both sweeps' suites take the record from that file, and each
+sweep has a sandbox of its own, so each shares its own. No workflow
+changes. `tests/mutation-order.test.ts` holds it for both suites as
+spec-core's test does: vitest made as Stryker's runner makes it, in
+processes of their own in a sandbox of two files, and the functions that
+name, read and write the file as a library.
+
+**Before it.** Main's five newest sweeps, of 9dd5c97, 08f22a1, efc750d,
+6dff3f7 and 82bbebd (runs 43227579950, 43220038767, 43210948669,
+43202969942 and 43192696212): the full sweep read 99.29% to 99.32%,
+9dd5c97's 99.30% over 8,697 with 61 undetected, and its static mutants
+ran 63,901 to 66,810 tests before their kills, 79.0 to 82.0 a kill; the
+core sweep read 99.34% to 99.36%, 9dd5c97's 99.34% over 6,353 with 42
+undetected, and 34,191 to 35,137, 51.6 to 53.1 a kill.
+
+**The sweeps of the change.** spec-brief#97's, of dd976c8 on 9dd5c97
+(run 43290935861): the full sweep read 99.30% over 8,697 and the core
+sweep 99.34% over 6,353, 9dd5c97's, with its 61 and 42 undetected, none
+new and none gone. The full sweep's static mutants ran 65,166 tests
+before their kills, 2.5% under 9dd5c97's and inside main's five, 80.0 a
+kill; the core sweep's ran 33,525, 1.9% under 9dd5c97's and 666 under
+main's least, 50.6 a kill. Nearly flat, as spec-graph's read, where
+spec-core's fell by a quarter and more. The sweeps took 32m53s and
+11m21s, 94.0 and 97.3 seconds for each second of their initial runs,
+where main's five read 74.2 to 91.1 and 87.0 to 95.9: over the top of
+main's, by about what the initial run's rounding to the second moves it.
+The full sweep's 21 seconds may be 20.5 to 21.5, 91.8 to 96.2 a second,
+and the core sweep's 7 may be 6.5 to 7.5, 90.8 to 104.8.
