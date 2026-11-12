@@ -54,7 +54,19 @@ what a run reports.
   now, by its real cause. A lone CR among LF lines, read as a space, which
   in the front matter joins two fields into one, is a warning at the first
   line holding one. With the rule `off`, the other rules speak as before.
-  27 lint rules and 5 collision rules.
+- **`empty-scope`**, a warning: an active brief whose `affectedFiles` is
+  written and empty, as `new` writes it to be filled, passed `lint` and
+  `--strict`, while nothing bounded what its round wrote and `matrix` only
+  noted it as unscoped, which `--format github` shows only under
+  `--verbose`. A brief that writes no `affectedFiles` at all is not told
+  so. It becomes an error in round 30.
+- **`glob-mistyped`**, a warning: a scope pattern that matches no file,
+  and would with its case ignored (`src/Loans.js` where the tree has
+  `src/loans.js`, as after a `git mv` that changed the case), or that holds
+  a comma outside braces, a list written as one value. Either protected
+  nothing in `protectedFiles` with only a `glob-matches-nothing` note,
+  which this replaces for such a pattern.
+  29 lint rules and 5 collision rules.
 
 ### Fixed
 
