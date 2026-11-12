@@ -1503,5 +1503,18 @@ name, read and write the file as a library.
 9dd5c97's 99.30% over 8,697 with 61 undetected, and its static mutants
 ran 63,901 to 66,810 tests before their kills, 79.0 to 82.0 a kill; the
 core sweep read 99.34% to 99.36%, 9dd5c97's 99.34% over 6,353 with 42
-undetected, and 34,191 to 35,137, 51.6 to 53.1 a kill. The pull
-request's sweeps are set beside them below.
+undetected, and 34,191 to 35,137, 51.6 to 53.1 a kill.
+
+**The sweeps of the change.** spec-brief#97's, of dd976c8 on 9dd5c97
+(run 43290935861): the full sweep read 99.30% over 8,697 and the core
+sweep 99.34% over 6,353, 9dd5c97's, with its 61 and 42 undetected, none
+new and none gone. The full sweep's static mutants ran 65,166 tests
+before their kills, 2.5% under 9dd5c97's and inside main's five, 80.0 a
+kill; the core sweep's ran 33,525, 1.9% under 9dd5c97's and 666 under
+main's least, 50.6 a kill. Nearly flat, as spec-graph's read, where
+spec-core's fell by a quarter and more. The sweeps took 32m53s and
+11m21s, 94.0 and 97.3 seconds for each second of their initial runs,
+where main's five read 74.2 to 91.1 and 87.0 to 95.9: over the top of
+main's, by about what the initial run's rounding to the second moves it.
+The full sweep's 21 seconds may be 20.5 to 21.5, 91.8 to 96.2 a second,
+and the core sweep's 7 may be 6.5 to 7.5, 90.8 to 104.8.
