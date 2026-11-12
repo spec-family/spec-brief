@@ -204,7 +204,7 @@ describe('resolving a configuration', () => {
 
   it('refuses a misspelt key rather than ignoring it', () => {
     expect(problems({ archving: {} })).toEqual(['"archving" is not a known key; did you mean "archiving"?']);
-    expect(problems({ rules: { title: 'loud' } })).toEqual(['"rules.title" must be one of "off", "note", "warning", "error", not "loud"']);
+    expect(problems({ rules: { title: 'loud' } })).toEqual(['"rules.title" must be one of "off", "note", "info", "warning", "warn", "error", not "loud"']);
   });
 
   it('parses text, with a byte-order mark, and names the file on failure', () => {
@@ -275,6 +275,12 @@ describe('what is published', () => {
   it('schema.json is the schema the loader validates against', () => {
     const published = JSON.parse(readFileSync('schema.json', 'utf8')) as unknown;
     expect(published).toEqual(configJsonSchema());
+  });
+
+  it('reads warn and info, the words spec-graph configures, as warning and note', () => {
+    const config = resolveConfig({ rules: { title: 'warn', placeholder: 'info', 'glob-matches-nothing': 'warning', 'unknown-field': 'note', glob: 'off', status: 'error' } });
+    expect(config.rules).toEqual({ title: 'warning', placeholder: 'note', 'glob-matches-nothing': 'warning', 'unknown-field': 'note', glob: 'off', status: 'error' });
+    expect(() => resolveConfig({ rules: { title: 'loud' } })).toThrow('must be one of "off", "note", "info", "warning", "warn", "error", not "loud"');
   });
 
   it('the configuration init writes loads, and means the defaults', () => {

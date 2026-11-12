@@ -255,6 +255,8 @@ function asRead(option: string, value: string, root: string): string {
       return JSON.stringify([...new Set(idsOf(value).map(idKey))].sort());
     case 'summary':
       return value.trim();
+    case 'format':
+      return formatNamed(value);
     case 'briefs':
     case 'archive':
       // Last: one outside the repository leaves the switch and is read as it
@@ -383,7 +385,7 @@ Options for every command, except where a line says otherwise:
   --root <dir>          run from this directory instead of the current one; it must exist, unless init makes it
   --config <file>       use this configuration file; not for init, which writes .spec-brief.json
   --no-config           use the defaults, ignoring any configuration file
-  --format <format>     the output format, pretty by default; each command's are below
+  --format <format>     the output format, pretty by default, which human names too; each command's are below
   --strict              treat warnings as errors; not for init, new or list, which have none
   --no-git              leave git out; read the files on disk instead
   --color, --no-color   force colour on or off; --color not for init or new, which print none
@@ -549,9 +551,18 @@ async function sameCommits(engine: BriefEngine, revisions: ReadonlyMap<string, r
   }
 }
 
+/**
+ * A `--format` as asked, read as the name spec-brief gives it: `human` is
+ * what spec-graph and spec-guard call the text for a terminal, and each tool
+ * refused the other's word (spec-core ADR-0005, the family contract, D8).
+ */
+function formatNamed(asked: string): string {
+  return asked === 'human' ? 'pretty' : asked;
+}
+
 /** A `--format` the command does not write, which the help lists by command. */
 function unwritten(command: string, spec: CommandSpec, values: Values): string | null {
-  const asked = text(values, 'format') ?? 'pretty';
+  const asked = formatNamed(text(values, 'format') ?? 'pretty');
   // Cast on the name, as above. The check below is what makes it true.
   const format = asked as Format;
   return spec.formats.includes(format) ? null : `--format for ${command} is one of ${spec.formats.join(', ')}, not "${format}"`;
@@ -876,7 +887,7 @@ export async function main(argv: readonly string[] = process.argv.slice(2), io: 
       // Asked for, the help is the answer; printed because no command was named, it is the error.
       return flag(values, 'help') ? EXIT_OK : EXIT_ERROR;
     }
-    const asked = text(values, 'format') ?? 'pretty';
+    const asked = formatNamed(text(values, 'format') ?? 'pretty');
     // Cast on the name, as in `parse`, which refused a format the command does not write.
     const format = asked as Format;
     // A file, or a name with nothing behind it, had the search for a
