@@ -246,8 +246,8 @@ describe('the collision matrix', () => {
     expect(collisionFindings(corpus, hurried).map((f) => f.message)).toEqual([
       'whether it writes what 002 protects in wave 1 is undecided: the search met its budget for "src/*/a/**" and "src/x*/**"',
     ]);
-    // Given its budget, the search decides it: the two meet.
-    expect(collisions(corpus).waves[0]?.intrusions.map((i) => [i.overlaps.length, i.undecided])).toEqual([[1, []]]);
+    // Given its budget, the search decides it: the two meet, at a path it built, with no tree to ask.
+    expect(collisions(corpus).waves[0]?.intrusions.map((i) => [i.overlaps.map((o) => o.inTree), i.undecided])).toEqual([[[null], []]]);
     // A pair decided and one not, told in one finding.
     const wave = hurried.waves[0]!;
     const both = { ...wave, intrusions: [{ ...wave.intrusions[0]!, overlaps: [{ patterns: ['src/b.ts', 'src/b.ts'] as const, witness: 'src/b.ts', inTree: null }] }] };

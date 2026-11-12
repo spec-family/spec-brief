@@ -244,6 +244,8 @@ export function reaches(writer: Scope, owner: Scope, budget: number = WITNESS_BU
   const undecided: (readonly [string, string])[] = [];
   for (const x of writer.affected) {
     for (const y of owner.protected) {
+      // Without it the answers are those of the search with the protections,
+      // which takes longer to give them: its mutant is equivalent.
       if (globWitness([x.glob, y.glob], [], budget).kind === 'none') continue;
       const witness = globWitness([x.glob, y.glob], avoid, budget);
       if (witness.kind === 'none') continue;
