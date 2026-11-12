@@ -225,6 +225,29 @@ describe('two patterns proved apart without a search', () => {
     expect(proved(' **/a.ts ', '**/a.ts')).toBe(false);
     expect(proved('**/x*y*.ts ', '**/xay.ts')).toBe(false);
   });
+
+  it('never calls apart two patterns that share a path, which would hide a collision: braces, classes, and a "**" in the middle against a literal', () => {
+    const proved = (x: string, y: string): boolean => {
+      const [px, py] = [parseGlob(x), parseGlob(y)];
+      if (!px.ok || !py.ok) throw new Error(`${x} or ${y} does not parse`);
+      return apart(px.glob, py.glob);
+    };
+    // Each pair shares the path in its comment.
+    expect(proved('src/{auth,db}/**', 'src/db/schema.ts')).toBe(false); // src/db/schema.ts
+    expect(proved('{src,lib}/x.ts', 'lib/x.ts')).toBe(false); // lib/x.ts
+    expect(proved('src/{a,b}{c,d}.ts', 'src/bc.ts')).toBe(false); // src/bc.ts
+    expect(proved('src/[ab]x.ts', 'src/bx.ts')).toBe(false); // src/bx.ts
+    expect(proved('src/x[0-9].ts', 'src/x7.ts')).toBe(false); // src/x7.ts
+    expect(proved('[!a]*/x.ts', 'b/x.ts')).toBe(false); // b/x.ts
+    expect(proved('src/**/schema.ts', 'src/db/v2/schema.ts')).toBe(false); // src/db/v2/schema.ts
+    expect(proved('src/**/schema.ts', 'src/schema.ts')).toBe(false); // src/schema.ts
+    expect(proved('**/db/**/x.ts', 'src/db/x.ts')).toBe(false); // src/db/x.ts
+    expect(proved('a/**/b/**/c.ts', 'a/b/c.ts')).toBe(false); // a/b/c.ts
+    // And the ones it does call apart share none.
+    expect(proved('src/{auth,db}/**', 'lib/x.ts')).toBe(true);
+    expect(proved('src/**/schema.ts', 'src/db/schema.sql')).toBe(true);
+    expect(proved('src/[ab]x.ts', 'src/[cd]y.ts')).toBe(true);
+  });
 });
 
 describe('a scope against its own protections', () => {

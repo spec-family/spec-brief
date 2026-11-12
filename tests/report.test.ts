@@ -421,12 +421,11 @@ describe('lists, matrices and plans', () => {
         ],
       }),
     ]);
-    // Given one state, the search decides no pair, and each is told as undecided.
+    // Given one state, the search decides no pair, and each is told as undecided;
+    // the pairs under directories apart from each other are proved apart without it.
     const hurried = prettyMatrix(collisions(guarded, { budget: 1 }), plainStyle).split('\n');
     expect(hurried.filter((line) => line.includes('protects'))).toEqual([
       '  ! 001 "src/domain/refund.ts" and what 002 protects, "src/domain/**": undecided within the search\'s budget',
-      '    001 "src/domain/refund.ts" and what 002 protects, "src/api/schema.ts": undecided within the search\'s budget',
-      '    001 "src/api/**" and what 002 protects, "src/domain/**": undecided within the search\'s budget',
       '    001 "src/api/**" and what 002 protects, "src/api/schema.ts": undecided within the search\'s budget',
     ]);
     // A collision outranks the mark.

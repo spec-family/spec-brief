@@ -244,9 +244,12 @@ export function reaches(writer: Scope, owner: Scope, budget: number = WITNESS_BU
   const undecided: (readonly [string, string])[] = [];
   for (const x of writer.affected) {
     for (const y of owner.protected) {
-      // Without it the answers are those of the search with the protections,
-      // which takes longer to give them: its mutant is equivalent.
-      if (globWitness([x.glob, y.glob], [], budget).kind === 'none') continue;
+      // A pair proved apart, by what each pattern fixes or by the two alone,
+      // is apart outside the writer's protections too, as in `meet`. Without
+      // the search of the two alone the answers are those of the search with
+      // the protections, which takes longer to give them: its mutant is
+      // equivalent.
+      if (apart(x.glob, y.glob) || globWitness([x.glob, y.glob], [], budget).kind === 'none') continue;
       const witness = globWitness([x.glob, y.glob], avoid, budget);
       if (witness.kind === 'none') continue;
       const patterns: readonly [string, string] = [x.pattern, y.pattern];
