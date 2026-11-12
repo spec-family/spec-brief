@@ -122,7 +122,21 @@ export const SCHEMA_URL = 'https://raw.githubusercontent.com/spec-family/spec-br
  */
 export const SCHEMA_PATH = './node_modules/@spec-family/spec-brief/schema.json';
 
-const SEVERITY: Schema = { type: 'string', enum: ['off', 'note', 'warning', 'error'] };
+/**
+ * A severity as configuration may write it. `warn` and `info` are the words
+ * spec-graph's configuration uses, and each tool refused the other's, so a
+ * repository that configures both wrote two vocabularies; each is read as the
+ * word spec-brief reports (spec-core ADR-0005, the family contract, D8).
+ */
+const SEVERITY: Schema = { type: 'string', enum: ['off', 'note', 'info', 'warning', 'warn', 'error'] };
+
+/** A severity as configuration wrote it, read as the word spec-brief reports. */
+function severityNamed(written: string): SeveritySetting {
+  if (written === 'warn') return 'warning';
+  if (written === 'info') return 'note';
+  // The schema has refused every other word.
+  return written as SeveritySetting;
+}
 const STRINGS: Schema = { type: 'array', items: { type: 'string', minLength: 1 } };
 
 const SECTION: Schema = {
@@ -411,7 +425,7 @@ export function resolveConfig(raw: unknown, file = 'configuration'): Config {
     archiving,
     claims: merged('claims', d.claims),
     registers: merged('registers', d.registers),
-    rules: { ...d.rules, ...(r['rules'] ?? {}) },
+    rules: { ...d.rules, ...Object.fromEntries(Object.entries(r['rules'] ?? {}).map(([id, written]) => [id, severityNamed(written)])) },
     plugins: (r['plugins'] ?? []).map(pluginFrom),
   };
   const semantic = checkConfig(config);

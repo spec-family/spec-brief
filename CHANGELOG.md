@@ -75,6 +75,13 @@ what a run reports.
   of patterns and the file, as a collision does; the grid marks it `!`, and
   `--format json` lists `protectedWrites` in each wave. A pair the search
   cannot decide within its budget is said to be undecided.
+- **The family's other words are taken.** In the configuration's `rules`,
+  `warn` and `info`, which spec-graph's configuration uses, are read as
+  `warning` and `note`; `--format human`, spec-graph's and spec-guard's
+  name for the text for a terminal, is `pretty`. Each tool refused the
+  other's word, so a repository that configured both wrote two
+  vocabularies. Findings, JSON and SARIF report the words they did; nothing
+  is renamed (D8, additive).
   29 lint rules and 6 collision rules.
 
 ### Fixed

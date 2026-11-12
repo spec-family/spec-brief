@@ -11,7 +11,7 @@ Every command takes these, except where the last column names it: an option is [
 | `--root <dir>` | Runs from another directory, which must be there: only `init` makes one that is not. | |
 | `--config <file>` | Names the configuration. | `init`, which writes `.spec-brief.json` |
 | `--no-config` | Uses the defaults. | |
-| `--format <format>` | `pretty` by default, or `json`; `lint`, `matrix` and `schedule`, which report findings, also write `sarif`, `github` and `gitlab`, and `--help` lists each command's formats. | |
+| `--format <format>` | `pretty` by default, which `human`, the word spec-graph and spec-guard use, names too, or `json`; `lint`, `matrix` and `schedule`, which report findings, also write `sarif`, `github` and `gitlab`, and `--help` lists each command's formats. | |
 | `--strict` | Makes warnings fail the run. | `init`, `new` and `list`, which have none |
 | `--no-git` | Leaves git out even inside a repository: the tree is read from disk, and `archive` records no commit. | |
 | `--color` | Colour, whatever the environment and the terminal say. | `init` and `new`, which print none |

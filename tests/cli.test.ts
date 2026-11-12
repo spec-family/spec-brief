@@ -668,7 +668,7 @@ describe('an option that would tell someone what is not so', () => {
         '  --root <dir>          run from this directory instead of the current one; it must exist, unless init makes it',
         '  --config <file>       use this configuration file; not for init, which writes .spec-brief.json',
         '  --no-config           use the defaults, ignoring any configuration file',
-        "  --format <format>     the output format, pretty by default; each command's are below",
+        "  --format <format>     the output format, pretty by default, which human names too; each command's are below",
         '  --strict              treat warnings as errors; not for init, new or list, which have none',
         '  --no-git              leave git out; read the files on disk instead',
         '  --color, --no-color   force colour on or off; --color not for init or new, which print none',
@@ -1322,6 +1322,19 @@ describe('list and matrix', () => {
     'briefs/003_c.md': goodBrief({ wave: '0' }),
     'briefs/archive/004_d.md': goodBrief({ status: 'archived' }),
   };
+
+  it('takes human, the word spec-graph and spec-guard use, for pretty, and once beside it', async () => {
+    const root = plain('cli-format-human', files);
+    for (const line of [['list'], ['lint'], ['matrix'], ['schedule']]) {
+      expect(await run(root, [...line, '--format', 'human', '--no-color']), line.join(' ')).toEqual(await run(root, [...line, '--no-color']));
+    }
+    expect(await run(root, ['list', '--format', 'pretty', '--format', 'human', '--no-color'])).toEqual(await run(root, ['list', '--no-color']));
+    expect((await run(root, ['list', '--format', 'human', '--format', 'json'])).err).toBe(
+      'spec-brief: --format is given "human" and "json", and takes one value; give one of the two\n',
+    );
+    // The formats a command writes are still listed by their names.
+    expect((await run(root, ['list', '--format', 'sarif'])).err).toBe('spec-brief: --format for list is one of pretty, json, not "sarif"\n');
+  });
 
   it('lists live briefs, archived ones on request, and the ready ones', async () => {
     const root = plain('cli-list', files);
