@@ -110,6 +110,8 @@ const TABLE: Readonly<Record<string, CommandSpec>> = {
       type: { type: 'string' },
       wave: { type: 'string' },
       'depends-on': { type: 'string' },
+      affected: { type: 'string' },
+      protected: { type: 'string' },
       date: { type: 'string' },
     },
     formats: ['pretty', 'json'],
@@ -404,6 +406,8 @@ new:
   --type <type>         a brief type from the configuration
   --wave <n>            the wave it runs in
   --depends-on <ids>    comma-separated ids it runs after
+  --affected <globs>    comma-separated globs it may write, for affectedFiles
+  --protected <globs>   comma-separated globs it must not change, for protectedFiles
   --date <YYYY-MM-DD>   the date in its front matter; default SOURCE_DATE_EPOCH's, or today's in UTC
 
 lint, matrix, schedule:
@@ -612,6 +616,34 @@ function dependencies(values: Values): string[] | undefined {
   return dependsOn;
 }
 
+/** The patterns of a list written with commas between them, outside braces, whose own commas are the glob's. */
+function patternsOf(listed: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let from = 0;
+  for (const [i, ch] of listed.split('').entries()) {
+    if (ch === '{') depth += 1;
+    else if (ch === '}') depth -= 1;
+    else if (ch === ',' && depth === 0) {
+      parts.push(listed.slice(from, i).trim());
+      from = i + 1;
+    }
+  }
+  return [...parts, listed.slice(from).trim()];
+}
+
+/** `--affected` or `--protected` as the patterns it names, or nothing where it is not given. */
+function scopeOption(values: Values, key: 'affected' | 'protected'): string[] | undefined {
+  const listed = text(values, key);
+  if (listed === undefined) return undefined;
+  const patterns = patternsOf(listed);
+  // A place that names nothing is a pattern left out, as in --depends-on.
+  if (patterns.includes('')) {
+    throw new UsageError(`--${key} is ${JSON.stringify(listed)}, which names no pattern in one of its places; give it globs with one comma between each two, as in src/auth/**,src/db/schema.ts`);
+  }
+  return patterns;
+}
+
 /**
  * The directories `init` sets up. One above the root is refused as the
  * configuration refuses one (config.ts), in the same words, before anything
@@ -747,6 +779,8 @@ async function runNew(run: Run): Promise<number> {
     type: text(run.values, 'type'),
     wave: integer(run.values, 'wave', 0),
     dependsOn,
+    affectedFiles: scopeOption(run.values, 'affected'),
+    protectedFiles: scopeOption(run.values, 'protected'),
     date: text(run.values, 'date') ?? run.today(),
   });
   if (run.format === 'json') run.out(jsonDocument('new', run.version, { ok: true, file: created.file }));
@@ -786,7 +820,9 @@ async function runList(run: Run): Promise<number> {
       }),
     );
   } else {
-    run.out(`${prettyList(rows, run.style)}\n`);
+    // Asked for the ready ones, a corpus with briefs and none ready is not one with no briefs.
+    const none = rows.length === 0 && briefs.length > 0;
+    run.out(`${none ? `no brief is ready of the ${briefs.length} listed; "spec-brief list" shows what each waits on` : prettyList(rows, run.style)}\n`);
   }
   return EXIT_OK;
 }

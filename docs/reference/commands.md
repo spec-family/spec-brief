@@ -8,7 +8,7 @@ Writes `.spec-brief.json` with every default spelled out, and creates the brief 
 
 ## `spec-brief new <title>`
 
-Scaffolds a brief with the next free number - one more than the highest id, live or archived, since ids are never reused - and every required section, each holding its `hint` in a comment. A comment is not content, so a fresh brief reads as unwritten until someone writes it. `--id`, `--type`, `--wave`, `--depends-on 7,8` and `--date` fill the front matter; without `--date` the date is [today's](options.md#todays-date).
+Scaffolds a brief with the next free number - one more than the highest id, live or archived, since ids are never reused - and every required section, each holding its `hint` in a comment. A comment is not content, so a fresh brief reads as unwritten until someone writes it. `--id`, `--type`, `--wave`, `--depends-on 7,8` and `--date` fill the front matter; without `--date` the date is [today's](options.md#todays-date). `--affected` and `--protected` fill `affectedFiles` and `protectedFiles` with globs written with commas between them, `--affected "src/auth/**,docs/{a,b}.md"`: a comma inside braces is the glob's own. A configured template takes them where it writes `{affectedFiles}` and `{protectedFiles}`, and a template with no such place is refused, rather than the scope left out without a word.
 
 ## `spec-brief lint [brief...]`
 

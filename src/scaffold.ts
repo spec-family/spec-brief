@@ -17,6 +17,13 @@ export interface NewBrief {
   readonly type?: string | undefined;
   readonly wave?: number | undefined;
   readonly dependsOn?: readonly string[] | undefined;
+  readonly affectedFiles?: readonly string[] | undefined;
+  readonly protectedFiles?: readonly string[] | undefined;
+}
+
+/** A list of patterns as front matter writes it: each quoted, since a glob may open with a character YAML reads as syntax. */
+function patternList(patterns: readonly string[] | undefined): string {
+  return `[${(patterns ?? []).map((p) => JSON.stringify(p)).join(', ')}]`;
 }
 
 /**
@@ -63,7 +70,7 @@ function frontMatter(config: Config, brief: NewBrief): string[] {
   if (brief.dependsOn !== undefined && brief.dependsOn.length > 0) {
     lines.push(`dependsOn: [${brief.dependsOn.map((d) => JSON.stringify(d)).join(', ')}]`);
   }
-  lines.push('affectedFiles: []', 'protectedFiles: []', '---');
+  lines.push(`affectedFiles: ${patternList(brief.affectedFiles)}`, `protectedFiles: ${patternList(brief.protectedFiles)}`, '---');
   return lines;
 }
 
@@ -77,6 +84,8 @@ export function renderNewBrief(config: Config, brief: NewBrief, template: string
       type: brief.type ?? '',
       wave: brief.wave === undefined ? '' : String(brief.wave),
       status: config.status.draft ?? config.status.active,
+      affectedFiles: patternList(brief.affectedFiles),
+      protectedFiles: patternList(brief.protectedFiles),
     });
   }
   const typed = brief.type === undefined ? [] : (typeSections(config, brief.type) ?? []);

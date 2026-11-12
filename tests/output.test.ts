@@ -145,7 +145,9 @@ describe('reports', () => {
     });
     const text = prettyPlan(refused, false, on).split('\n');
     expect(text[0]).toBe(`${esc}[31mcannot archive briefs/001_a.md:${esc}[39m`);
-    expect(text).toContain('');
+    // One line names the brief, and its refusals and warnings follow in the order of its lines.
+    expect(text.filter((line) => line.includes('briefs/001_a.md'))).toHaveLength(1);
+    expect(text.findIndex((line) => line.includes('archive-draft'))).toBeLessThan(text.findIndex((line) => line.includes('out-of-scope')));
     expect(text.join('\n')).toContain('out-of-scope');
     expect(text.join('\n')).not.toContain('nothing was committed');
     const archived = corpusOf({ 'briefs/archive/001_a.md': goodBrief({ status: 'archived' }) });

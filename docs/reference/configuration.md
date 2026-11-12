@@ -10,7 +10,7 @@
 | `archive` | `"<briefs>/archive"` | Directory of archived briefs. |
 | `files` | `"[0-9]*.md"` | Glob a file name must match to be a brief. |
 | `exclude` | `[]` | File-name globs that are never briefs, such as an index. |
-| `template` | `null` | A template file for `new`, with `{id}`, `{title}`, `{date}`, `{type}`, `{wave}`, `{status}`. |
+| `template` | `null` | A template file for `new`, with `{id}`, `{title}`, `{date}`, `{type}`, `{wave}`, `{status}`, and `{affectedFiles}` and `{protectedFiles}`, each a list, `[]` when `new` is given none. |
 | `id` | `{ "source": "filename", "separator": "_", "digits": 3 }` | Where an id comes from, and how a new one is written. |
 | `status` | `{ "field": "status", "draft": "draft", "active": "active", "deferred": "deferred", "archived": "archived" }` | The words a repository uses. `field` may be a key of any script, `狀態` as well as `status`, followed by an ASCII colon in the brief; `field: null` reads status from location alone; `draft` and `deferred` may be `null` where a repository has no such word. |
 | `sections` | Intent, Negative Scope, Not Empowered (optional), Invariants (checklist) | Sections every live brief carries: a name, or `{ name, aliases, mustContain, checklist, optional, hint }`. `hint` is below. |
