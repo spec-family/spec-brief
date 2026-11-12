@@ -120,6 +120,10 @@ describe('encoding', () => {
     expect(one.map((f) => f.message)).toEqual(['holds a carriage return (CR) with no line feed after it, which spec-brief reads as a space, not a line break']);
   });
 
+  it('reads a brief of one line with no line break at all', async () => {
+    expect((await findings({ [A]: '# A brief' })).filter((f) => f.rule === 'encoding')).toEqual([]);
+  });
+
   it('reads CRLF and a byte-order mark as UTF-8 text', async () => {
     expect(await findings({ [A]: `${String.fromCharCode(0xfeff)}${goodBrief().replaceAll('\n', '\r\n')}` })).toEqual([]);
   });
@@ -195,6 +199,24 @@ describe('what kept a brief from being read whole', () => {
       ['encoding', null, 1, 'holds a carriage return (CR) with no line feed after it, which spec-brief reads as a space, not a line break'],
     ]);
     expect(await problems(goodBrief().replace('The tree is better.', 'The tree\ris better.'))).toEqual([]);
+  });
+
+  it('names a duplicate of the configured status field by its spelling, and with none configured never asks for one', async () => {
+    const state = config({ status: { field: 'state' } });
+    expect(await problems('---\nstate: active\nState: done\n---\n\n# A\n', state)).toEqual([['front-matter', 'state', 3, '"State" is declared twice (first on line 2)']]);
+    const none = config({ status: { field: null } });
+    expect(await problems('---\nextra: x\nExtra: y\n---\n\n# A\n', none)).toEqual([['front-matter', 'Extra', 3, '"Extra" is declared twice (first on line 2)']]);
+  });
+
+  it('reads a lone CR as in the block wherever the block runs: to a close never written, and on the closing line', async () => {
+    const lone = 'holds a carriage return (CR) with no line feed after it, which spec-brief reads as a space, not a line break';
+    expect(await problems('---\nstatus: active\nwave: 1\rprotectedFiles: [a]\n# A\n')).toEqual([
+      ['encoding', null, 3, lone],
+      ['front-matter', null, 1, 'the front matter opened on line 1 is never closed'],
+    ]);
+    expect(await problems('---\nstatus: active\n---\r\r\n\n# A\n')).toEqual([['encoding', null, 3, lone]]);
+    // With no block, a CR below the first line hides no field.
+    expect(await problems('# A\n\nsome\rtext\n')).toEqual([]);
   });
 
   it('is asked of the rules whatever the configuration sets them to', async () => {

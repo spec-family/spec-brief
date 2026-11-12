@@ -188,7 +188,9 @@ export async function readingProblems(corpus: Corpus, briefs: readonly Brief[]):
     for (const rule of rules) {
       const results = await rule.check({ brief, corpus, config: corpus.config, repoFiles: null, documents: new Map(), shared });
       for (const result of results) {
-        if (rule.id === 'encoding' && !inFrontMatter(brief, result.line - 1)) continue;
+        // Only an encoding finding can stand below the block: every other
+        // reading rule reports a line of it, or its first.
+        if (!inFrontMatter(brief, result.line - 1)) continue;
         problems.push({ rule: rule.id, field: problemField(rule.id, brief, corpus.config, result), line: result.line, message: result.message });
       }
     }

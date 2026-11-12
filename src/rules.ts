@@ -196,9 +196,11 @@ export function problemField(rule: string, brief: Brief, config: Config, result:
   // field alone, `glob` by the field, a colon and the pattern.
   if (rule === 'field' || rule === 'glob') return result.subject!.split(':')[0]!;
   if (rule !== 'front-matter') return null;
-  const entry = brief.frontMatter?.entries.find((e) => e.line === result.line - 1);
+  // A front-matter finding is of a block, so there is one.
+  const entry = brief.frontMatter!.entries.find((e) => e.line === result.line - 1);
   if (entry === undefined) return null;
-  const names = [...BUILT_IN_FIELDS, ...config.fields, ...(config.status.field === null ? [] : [config.status.field])];
+  const names = [...BUILT_IN_FIELDS, ...config.fields];
+  if (config.status.field !== null) names.push(config.status.field);
   return names.find((name) => keyName(name) === entry.name) ?? entry.key;
 }
 

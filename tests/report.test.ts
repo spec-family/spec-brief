@@ -289,13 +289,13 @@ describe('lists, matrices and plans', () => {
   });
 
   it('names beneath the table the briefs that were not read whole, in colour where colour is on', () => {
-    const listed = corpusOf({ 'briefs/001_a.md': goodBrief(), 'briefs/002_b.md': goodBrief() });
+    const listed = corpusOf({ 'briefs/001_a.md': goodBrief(), 'briefs/002_b.md': goodBrief(), 'briefs/003_c.md': goodBrief() });
     const problem = { rule: 'field', field: 'protectedFiles', line: 3, message: 'm' };
-    const rows = listed.briefs.map((brief, i) => ({ brief, ready: true, waitingOn: [], problems: i === 1 ? [problem] : [] }));
+    const rows = listed.briefs.map((brief, i) => ({ brief, ready: true, waitingOn: [], problems: i === 0 ? [] : [problem] }));
     const esc = String.fromCharCode(27);
-    expect(prettyList(rows, { color: true }).split('\n').slice(3)).toEqual([
+    expect(prettyList(rows, { color: true }).split('\n').slice(4)).toEqual([
       '',
-      `${esc}[33mnot read whole: briefs/002_b.md${esc}[39m`,
+      `${esc}[33mnot read whole: briefs/002_b.md, briefs/003_c.md${esc}[39m`,
       `${esc}[2mspec-brief lint names what to fix${esc}[22m`,
     ]);
     // Rows that carry no problems, or none at all, add nothing.
