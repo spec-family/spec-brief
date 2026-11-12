@@ -221,6 +221,9 @@ describe('two patterns proved apart without a search', () => {
     expect(proved('src/', '**/b.ts')).toBe(false);
     expect(proved('src/**', '**/b.ts')).toBe(false);
     expect(proved('src/a\\*.ts', '**/b.ts')).toBe(false);
+    // A pattern as written, spaces around it, is the pattern the parse read.
+    expect(proved(' **/a.ts ', '**/a.ts')).toBe(false);
+    expect(proved('**/x*y*.ts ', '**/xay.ts')).toBe(false);
   });
 });
 

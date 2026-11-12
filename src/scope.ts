@@ -153,6 +153,9 @@ const fixedOf = new WeakMap<Glob, Fixed>();
 /** A character of a name's syntax, where its written text stops being the name's. */
 const NAME_SYNTAX = /[*?[\]{}!]/;
 
+/** The last character of a name's syntax, and the text after it to the end. */
+const LAST_SYNTAX = /[*?[\]{}!][^*?[\]{}!]*$/;
+
 /**
  * How the last name of every path a pattern matches starts and ends: the
  * text before the name's first piece of syntax, and after its last; the name
@@ -164,12 +167,12 @@ const NAME_SYNTAX = /[*?[\]{}!]/;
  * path's last name.
  */
 function lastName(glob: Glob): Ends | null {
+  // The source as written, which the parse read trimmed.
   const source = glob.source.trim();
   if (source.includes('\\') || glob.literals.some((literal) => literal.reading !== 'file')) return null;
   let depth = 0;
   let slash = -1;
-  for (let i = 0; i < source.length; i += 1) {
-    const ch = source[i];
+  for (const [i, ch] of source.split('').entries()) {
     if (ch === '{') depth += 1;
     else if (ch === '}') depth -= 1;
     else if (ch === '/') {
@@ -182,9 +185,7 @@ function lastName(glob: Glob): Ends | null {
   const name = source.slice(slash + 1);
   const first = name.search(NAME_SYNTAX);
   if (first === -1) return { prefix: name, suffix: name };
-  let last = name.length - 1;
-  while (!NAME_SYNTAX.test(name[last]!)) last -= 1;
-  return { prefix: name.slice(0, first), suffix: name.slice(last + 1) };
+  return { prefix: name.slice(0, first), suffix: name.slice(name.search(LAST_SYNTAX) + 1) };
 }
 
 /** Whether some name can start and end as both say. */
