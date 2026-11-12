@@ -857,6 +857,34 @@ describe('scopes', () => {
     expect(await findings({ [A]: goodBrief({ protectedFiles: '[src/Loans.js]' }) })).toEqual([]);
   });
 
+  it('splits a list written as one value at the commas outside braces, and keeps a brace\'s own', async () => {
+    const tree = ['docs/x.md'];
+    const hints = async (pattern: string): Promise<(string | undefined)[]> =>
+      (await findings({ [A]: goodBrief({ affectedFiles: '[docs/x.md]', protectedFiles: JSON.stringify([pattern]) }) }, config(), tree))
+        .filter((f) => f.rule === 'glob-mistyped')
+        .map((f) => f.hint);
+    expect(await hints('src/{a,b}.ts, lib/c.ts')).toEqual(['write a list, one pattern to an item: protectedFiles: [src/{a,b}.ts, lib/c.ts]; as written it protects nothing']);
+    expect(await hints('src/a.ts , lib/{c,d}/e.ts')).toEqual(['write a list, one pattern to an item: protectedFiles: [src/a.ts, lib/{c,d}/e.ts]; as written it protects nothing']);
+    // A brace closed in a class is no brace of a group, and does not end one.
+    expect(await hints('src/[}]x.ts, lib/c.ts')).toEqual(['write a list, one pattern to an item: protectedFiles: [src/[}]x.ts, lib/c.ts]; as written it protects nothing']);
+    // Commas only inside braces are the glob's: a pattern that matches nothing yet, and a note.
+    expect(await hints('src/{a,b}.ts')).toEqual([]);
+    const found = await findings({ [A]: goodBrief({ affectedFiles: '[docs/x.md]', protectedFiles: '["src/{a,b}.ts"]' }) }, config(), tree);
+    expect(found.map((f) => [f.rule, f.subject])).toEqual([['glob-matches-nothing', 'protectedFiles: src/{a,b}.ts']]);
+  });
+
+  it('names a mistyped pattern by its field, and leaves alone a pattern whose case cannot be folded', async () => {
+    const found = await findings({ [A]: goodBrief({ affectedFiles: '[docs/x.md]', protectedFiles: '[src/Loans.js]' }) }, config(), ['docs/x.md', 'src/loans.js']);
+    expect(found.map((f) => [f.rule, f.subject])).toEqual([['glob-mistyped', 'protectedFiles: src/Loans.js']]);
+    // Folded, the range runs backwards and is no pattern: nothing matches it either way.
+    const backwards = await findings({ [A]: goodBrief({ affectedFiles: '[docs/x.md]', protectedFiles: '["src/[Z-a]x.ts"]' }) }, config(), ['docs/x.md']);
+    expect(backwards.map((f) => f.rule)).toEqual(['glob-matches-nothing']);
+  });
+
+  it('warns of an empty scope whatever else a field of the brief holds that cannot be read', async () => {
+    expect(await rulesHit({ [A]: goodBrief({ affectedFiles: '[]', wave: 'two' }) })).toEqual(['empty-scope@3', 'field@4']);
+  });
+
   it('names three files a mistyped pattern matches, and counts the rest', async () => {
     const tree = ['A/1.ts', 'A/2.ts', 'A/3.ts', 'A/4.ts', 'A/5.ts'];
     const found = await findings({ [A]: goodBrief({ affectedFiles: '[a/**]' }) }, config(), tree);

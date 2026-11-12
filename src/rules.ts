@@ -289,8 +289,7 @@ function commaParts(pattern: string): string[] {
   const parts: string[] = [];
   let depth = 0;
   let from = 0;
-  for (let i = 0; i < pattern.length; i += 1) {
-    const ch = pattern[i];
+  for (const [i, ch] of pattern.split('').entries()) {
     if (ch === '{') depth += 1;
     else if (ch === '}' && depth > 0) depth -= 1;
     else if (ch === ',' && depth === 0) {
@@ -302,7 +301,7 @@ function commaParts(pattern: string): string[] {
 }
 
 /** How a scope pattern that matches nothing was probably meant, as `glob-mistyped` reports it. */
-export type Mistyping = { readonly kind: 'case'; readonly files: readonly string[] } | { readonly kind: 'comma'; readonly parts: readonly string[] };
+export type Mistyping = { readonly files: readonly string[] } | { readonly parts: readonly string[] };
 
 /**
  * Whether a pattern that matches no file of the tree was mistyped: it
@@ -318,10 +317,10 @@ export function mistyping(pattern: string, glob: Glob, files: readonly string[])
   const lowered = parseGlob(pattern.toLowerCase(), { literal: 'either' });
   if (lowered.ok) {
     const matched = files.filter((file) => matchGlob(lowered.glob, file.toLowerCase()));
-    if (matched.length > 0) return { kind: 'case', files: matched };
+    if (matched.length > 0) return { files: matched };
   }
   const parts = commaParts(pattern);
-  return parts.length > 1 ? { kind: 'comma', parts } : null;
+  return parts.length > 1 ? { parts } : null;
 }
 
 /** The patterns of a field that match nothing and were mistyped, each with how. */
@@ -880,7 +879,7 @@ export const RULES: readonly Rule[] = [
         mistyped(brief, field, repoFiles).map(({ pattern, how }) => {
           const effect = field === 'protectedFiles' ? 'protects nothing' : 'puts nothing in the scope';
           const common = { line: at(lineOfField(brief, field)), subject: `${field}: ${pattern}` };
-          if (how.kind === 'case') {
+          if ('files' in how) {
             const shown = inWords(how.files.slice(0, 3)) + (how.files.length > 3 ? ` and ${how.files.length - 3} more` : '');
             return {
               ...common,
