@@ -157,6 +157,27 @@ describe('placing briefs', () => {
     ]);
   });
 
+  it('reports a cycle through a deferred brief, as lint does, as a warning until round 30, and places the rest all the same', () => {
+    const files = {
+      [B(4)]: goodBrief({ affectedFiles: '[d]' }),
+      [B(5)]: goodBrief({ status: 'deferred', trigger: 'when y', dependsOn: '[6]' }),
+      [B(6)]: goodBrief({ affectedFiles: '[f]', dependsOn: '[5]' }),
+    };
+    const corpus = corpusOf(files);
+    const s = schedule(corpus);
+    expect(s.cycles).toEqual([]);
+    expect(placed(corpus)).toEqual([['004', null, 1]]);
+    expect(s.deferredCycles.map((c) => c.map((b) => b.id))).toEqual([['005', '006', '005']]);
+    const cycle = (cfg = config()) => scheduleFindings(corpusOf(files, cfg), schedule(corpusOf(files, cfg))).filter((f) => f.rule === 'dependency-cycle');
+    expect(cycle().map((f) => [f.severity, f.file, f.line, f.message])).toEqual([
+      ['warning', B(5), 4, 'dependencies form a cycle, so no wave can hold them: 005 -> 006 -> 005'],
+    ]);
+    // Configured lower, it is lower; off, it is not reported.
+    expect(cycle(config({ rules: { 'dependency-cycle': 'note' } })).map((f) => f.severity)).toEqual(['note']);
+    expect(cycle(config({ rules: { 'dependency-cycle': 'off' } }))).toEqual([]);
+    expect(prettySchedule(s, null, { color: false }).split('\n')).toContain('cycle: 005 -> 006 -> 005, through deferred work, so none of them can become ready');
+  });
+
   it('keeps apart a pair the search could not decide, and says so', () => {
     const corpus = corpusOf({ [B(1)]: goodBrief({ affectedFiles: '[src/**]' }), [B(2)]: goodBrief({ affectedFiles: '["**/*.ts"]' }) });
     const s = schedule(corpus, { budget: 1 });

@@ -82,7 +82,27 @@ what a run reports.
   other's word, so a repository that configured both wrote two
   vocabularies. Findings, JSON and SARIF report the words they did; nothing
   is renamed (D8, additive).
+- **`new --affected` and `new --protected`** fill `affectedFiles` and
+  `protectedFiles`, globs written with commas between them; a comma inside
+  braces is the glob's own. A template takes them at `{affectedFiles}` and
+  `{protectedFiles}`; a template with no such place is refused, rather than
+  the scope left out.
   29 lint rules and 6 collision rules.
+
+### Changed
+
+- **`protected-file` names the step that is read.** Its hint said to
+  record the departure in the brief, which nothing reads; it now says to ask
+  the person who approved the brief for a ruling (`spec-harness escalate`),
+  which a plugin that verifies rulings lifts the refusal by.
+- **`init` writes every default**, `claims`, `registers`, `placeholders`,
+  `exclude`, `template`, `sectionOrder`, `fields`, `rules`, `plugins`
+  and `archiving.rewriteLinks` and `freeze` among them, as it said it did.
+- **A refused archive names the brief once**, and its reasons and warnings
+  follow in the order of its lines; the brief's path was printed again
+  under the line that named it, and the warnings apart, out of order.
+- **`list --ready` with briefs and none ready** says so, and that `list`
+  shows what each waits on; it said there were no briefs.
 
 ### Fixed
 
@@ -102,6 +122,11 @@ what a run reports.
   told it declares no `affectedFiles`; it is told none of its patterns can
   be read, names them, and is pointed at `lint`'s `glob` findings, on the
   line of the field.
+- **`schedule` reports a cycle through a deferred brief**, which `lint`
+  fails as `dependency-cycle` and `schedule` passed without a word. None
+  of its briefs can become ready. A warning in `schedule` until round 30,
+  so a run that passed before still passes without `--strict`; it places
+  every other brief as before.
 
 ## 0.14.0
 

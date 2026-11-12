@@ -16,7 +16,7 @@ import type { Brief } from './brief.js';
 import type { Config, SectionRule } from './config.js';
 import type { CollisionReport, Overlap } from './collisions.js';
 import { idKey } from './corpus.js';
-import { type ReadingProblem, summarise } from './lint.js';
+import { type ReadingProblem, sortFindings, summarise } from './lint.js';
 import { literal } from './literal.js';
 import { ARCHIVE_RULES, COLLISION_RULES, RULES } from './rules.js';
 import { type Breach, breachReasons, holds, moves, type Passed, reasons, type Schedule } from './schedule.js';
@@ -68,9 +68,14 @@ export function summaryLine(findings: readonly Finding[]): string {
   return `${plural(s.errors, 'error')}, ${plural(s.warnings, 'warning')}, ${plural(s.notes, 'note')}`;
 }
 
-export function prettyFindings(findings: readonly Finding[], style: Style): string {
+/**
+ * Findings by file, each file's under its name. `heading` is a file whose
+ * name the caller has printed already, as `archive` prints the brief's, so
+ * its findings come without it.
+ */
+export function prettyFindings(findings: readonly Finding[], style: Style, heading?: string): string {
   const out: string[] = [];
-  let file: string | undefined;
+  let file: string | undefined = heading;
   const width = Math.max(1, ...findings.map((f) => String(f.line).length));
   for (const f of findings) {
     if (f.file !== file) {
@@ -487,6 +492,7 @@ export function prettySchedule(s: Schedule, written: readonly string[] | null, s
   }
   if (waves.length > 0) out.push('');
   for (const cycle of s.cycles) out.push(`${paint(style, 'red', 'cycle:')} ${cycle.map(label).join(' -> ')}`);
+  for (const cycle of s.deferredCycles) out.push(`${paint(style, 'yellow', 'cycle:')} ${cycle.map(label).join(' -> ')}, through deferred work, so none of them can become ready`);
   for (const u of s.unplaced) {
     const why = u.because === 'deferred' ? 'which is deferred' : u.because === 'cycle' ? 'which is in a cycle' : 'which is not placed';
     out.push(`${paint(style, 'dim', 'waits:')} ${label(u.brief)} on ${label(u.waitsOn)}, ${why}`);
@@ -550,8 +556,9 @@ export function prettyPlan(plan: Plan, dryRun: boolean, style: Style): string {
   const verb = plan.action === 'archive' ? 'archive' : 'unarchive';
   if (plan.done) return `${plan.brief.file} is already ${plan.action === 'archive' ? 'archived' : 'live'}; nothing to do`;
   if (plan.blocking.length > 0) {
-    out.push(paint(style, 'red', `cannot ${verb} ${plan.brief.file}:`), prettyFindings(plan.blocking, style));
-    if (plan.warnings.length > 0) out.push('', prettyFindings(plan.warnings, style));
+    // The reasons and the warnings in the order of the brief's lines, under
+    // the one line that names it.
+    out.push(paint(style, 'red', `cannot ${verb} ${plan.brief.file}:`), prettyFindings(sortFindings([...plan.blocking, ...plan.warnings]), style, plan.brief.file));
     return out.join('\n');
   }
   out.push(`${dryRun ? 'would move' : 'moved'} ${plan.from} -> ${plan.to}`);
@@ -559,7 +566,7 @@ export function prettyPlan(plan: Plan, dryRun: boolean, style: Style): string {
   for (const file of plan.inboundRewritten) out.push(`  ${file}: links to it rewritten`);
   for (const f of plan.inboundFrozen) out.push(`  ${f.file}:${f.line}: links to the old path, and is frozen, so it was left as it is`);
   if (plan.changes.length > 0) out.push(`  the round changed ${plural(plan.changes.length, 'file')}`);
-  if (plan.warnings.length > 0) out.push('', prettyFindings(plan.warnings, style));
+  if (plan.warnings.length > 0) out.push('', prettyFindings(sortFindings(plan.warnings), style));
   if (dryRun && plan.banner.length > 0) out.push('', paint(style, 'dim', 'banner:'), ...plan.banner.map((l) => `  ${l}`));
   if (!dryRun) out.push('', paint(style, 'dim', 'nothing was committed; review the change and commit it with the round'));
   return out.join('\n');

@@ -29,7 +29,7 @@ import {
 import { fileNameFor, nextId, renderNewBrief } from '../src/scaffold.js';
 import { schedule, scheduleFindings } from '../src/schedule.js';
 import type { Finding } from '../src/types.js';
-import { config, corpusOf, goodBrief } from './helpers.js';
+import { brief, config, corpusOf, goodBrief } from './helpers.js';
 
 const plainStyle = { color: false };
 const finding = (over: Partial<Finding> = {}): Finding => ({ rule: 'r', severity: 'error', message: 'm', file: 'a.md', line: 1, ...over });
@@ -650,6 +650,10 @@ describe('scaffolding', () => {
     );
     const noStatus = renderNewBrief(config({ status: { field: null } }), { id: '1', title: 'T', date: '2026-09-24', type: 'unknown', dependsOn: [] }, null);
     expect(noStatus.startsWith('---\ndate: 2026-09-24\ntype: unknown\naffectedFiles: []')).toBe(true);
+    // A scope given is written as a list of quoted patterns, which the brief reads back as given.
+    const scoped = renderNewBrief(config(), { id: '1', title: 'T', date: '2026-09-24', affectedFiles: ['src/**', 'docs/{a,b}.md'], protectedFiles: ['**/schema.ts'] }, null);
+    expect(scoped).toContain('\naffectedFiles: ["src/**", "docs/{a,b}.md"]\nprotectedFiles: ["**/schema.ts"]\n---\n');
+    expect([brief(scoped).affectedFiles, brief(scoped).protectedFiles]).toEqual([['src/**', 'docs/{a,b}.md'], ['**/schema.ts']]);
   });
 
   it('writes a status word in Chinese as it is typed, and reads the brief back', () => {

@@ -252,7 +252,7 @@ describe('what archive says when it refuses', () => {
       'briefs/001_a.md:24 error open-task: "open" is neither ticked nor dispositioned | tick it, or say why under it, as a bullet or as a paragraph after a blank line, starting "**Delegated", "**Accepted debt", "**Rejected"',
       'briefs/001_a.md:3 error dependency-open: depends on 002, which is not archived yet | archive 002 first, or drop the dependency if it was never real',
       'briefs/001_a.md:1 error dirty-tree: the working tree has uncommitted changes outside the briefs: src/wip.ts | commit them so the recorded commit holds the round, or pass --allow-dirty',
-      'briefs/001_a.md:5 error protected-file: the round changed src/locked.ts, which this brief protects | revert the change, or record the departure in the brief before archiving it',
+      'briefs/001_a.md:5 error protected-file: the round changed src/locked.ts, which this brief protects | revert the change, or ask the person who approved the brief to rule on it (spec-harness escalate): a signed ruling, which a plugin that verifies rulings reads, lifts this',
       'briefs/001_a.md:1 error archive-exists: briefs/archive/001_a.md already exists | an archived brief is never overwritten',
     ]);
     expect(table(plan.warnings)).toEqual([
@@ -378,7 +378,6 @@ describe('what the terminal shows', () => {
     const refused = prettyPlan(planArchive(corpus, corpus.briefs[0]!, { date: '2026-09-24' }), false, { color: false });
     expect(refused.split('\n')).toEqual([
       'cannot archive briefs/001_a.md:',
-      'briefs/001_a.md',
       '  2  error    is a draft, and a draft has not been executed  archive-draft',
       `${' '.repeat(14)}set "status: active" once the round runs`,
     ]);

@@ -38,6 +38,7 @@ import { asWaivers, loadPlugins } from './plugins.js';
 import { documentsNamed } from './references.js';
 import { fileNameFor, nextId, renderNewBrief } from './scaffold.js';
 import { planWaves, type Schedule, schedule, scheduleFindings, type ScheduleOptions } from './schedule.js';
+import { templateHoles } from './text.js';
 import type { Finding, Phase } from './types.js';
 
 export class EngineError extends Error {
@@ -118,6 +119,8 @@ export interface NewOptions {
   readonly type?: string | undefined;
   readonly wave?: number | undefined;
   readonly dependsOn?: readonly string[] | undefined;
+  readonly affectedFiles?: readonly string[] | undefined;
+  readonly protectedFiles?: readonly string[] | undefined;
   readonly date?: string | undefined;
 }
 
@@ -597,9 +600,16 @@ export class BriefEngine {
     if (this.config.template !== null && template === null) {
       throw new EngineError('not-found', `the template ${this.config.template} does not exist`);
     }
+    // A scope given for a template with nowhere to put it would be dropped
+    // without a word, and the brief written as if none had been asked for.
+    for (const field of ['affectedFiles', 'protectedFiles'] satisfies (keyof NewOptions)[]) {
+      if (template !== null && options[field] !== undefined && !templateHoles(template).includes(field)) {
+        throw new EngineError('invalid', `the template ${String(named)} has no {${field}} for the patterns given; write "${field}: {${field}}" in its front matter`);
+      }
+    }
     const content = renderNewBrief(
       this.config,
-      { id, title, date, type: options.type, wave: options.wave, dependsOn: options.dependsOn },
+      { id, title, date, type: options.type, wave: options.wave, dependsOn: options.dependsOn, affectedFiles: options.affectedFiles, protectedFiles: options.protectedFiles },
       template,
     );
     const dir = normalisePath(this.config.briefs);

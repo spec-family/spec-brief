@@ -42,7 +42,7 @@ describe('a waiver', () => {
   it('turns the refusal it matches into a note naming the plugin, the rule, the path and the reason', () => {
     const plan = applyWaivers(refused(), [{ plugin: 'harness', waiver: { rule: 'protected-file', path: 'src/a.ts', reason: 'ruling R1, signed by alice, allows it' } }]);
     expect(table(plan.blocking)).toEqual([
-      '4 error protected-file: the round changed src/b.ts, which this brief protects | revert the change, or record the departure in the brief before archiving it',
+      '4 error protected-file: the round changed src/b.ts, which this brief protects | revert the change, or ask the person who approved the brief to rule on it (spec-harness escalate): a signed ruling, which a plugin that verifies rulings reads, lifts this',
     ]);
     expect(table(plan.warnings)).toEqual([
       '3 warning out-of-scope: the round changed 2 file(s) outside affectedFiles: lib/x.ts, lib/y.ts | widen affectedFiles if the scope was wrong, or say why in the summary',

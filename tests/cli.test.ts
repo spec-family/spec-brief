@@ -306,6 +306,8 @@ describe('an input that names nothing', () => {
     ['new', ['T'], 'type'],
     ['new', ['T'], 'wave'],
     ['new', ['T'], 'depends-on'],
+    ['new', ['T'], 'affected'],
+    ['new', ['T'], 'protected'],
     ['new', ['T'], 'date'],
     ['archive', ['1'], 'pr'],
     ['archive', ['1'], 'commit'],
@@ -514,7 +516,7 @@ describe('an option that would tell someone what is not so', () => {
     new: {
       line: ['new', 'T'],
       refuses: ['strict', 'color'],
-      reads: '--root, --config, --no-config, --format, --no-git, --id, --type, --wave, --depends-on and --date, and takes --no-color',
+      reads: '--root, --config, --no-config, --format, --no-git, --id, --type, --wave, --depends-on, --affected, --protected and --date, and takes --no-color',
     },
     list: { line: ['list'], refuses: ['strict'], reads: '--root, --config, --no-config, --format, --no-git, --color, --no-color, --ready and --archived' },
     lint: { line: ['lint'], refuses: [], reads: '' },
@@ -635,7 +637,7 @@ describe('an option that would tell someone what is not so', () => {
       'spec-brief: init does not read --config; it reads --root, --format, --briefs and --archive, and takes --no-config, --no-git and --no-color\n',
     );
     expect((await run(root, ['new', 'T', '--no-color', '--color'])).err).toBe(
-      'spec-brief: new does not read --color; it reads --root, --config, --no-config, --format, --no-git, --id, --type, --wave, --depends-on and --date, and takes --no-color\n',
+      'spec-brief: new does not read --color; it reads --root, --config, --no-config, --format, --no-git, --id, --type, --wave, --depends-on, --affected, --protected and --date, and takes --no-color\n',
     );
   });
 
@@ -741,6 +743,8 @@ describe('an option given two values, and a wrong line beside --help', () => {
     [['new', 'T'], 'type', 'feature', 'defect'],
     [['new', 'T'], 'wave', '1', '2'],
     [['new', 'T'], 'depends-on', '1', '1,2'],
+    [['new', 'T'], 'affected', 'src/a/**', 'src/b/**'],
+    [['new', 'T'], 'protected', 'src/a.ts', 'src/b.ts'],
     [['new', 'T'], 'date', '2026-01-01', '2026-02-02'],
     [['archive', '1', '--dry-run'], 'pr', '5', '6'],
     [['archive', '1', '--dry-run'], 'commit', 'HEAD', 'HEAD~1'],
@@ -860,7 +864,7 @@ describe('an option given two values, and a wrong line beside --help', () => {
     [['list', 'extra'], 'list takes no argument, not "extra": spec-brief list'],
     [['list', '--root', ''], '--root is "", which is no value; give it one, or leave the option out'],
     [['init', '--strict'], 'init does not read --strict; it reads --root, --format, --briefs and --archive, and takes --no-config, --no-git and --no-color'],
-    [['new', 'T', '--color'], 'new does not read --color; it reads --root, --config, --no-config, --format, --no-git, --id, --type, --wave, --depends-on and --date, and takes --no-color'],
+    [['new', 'T', '--color'], 'new does not read --color; it reads --root, --config, --no-config, --format, --no-git, --id, --type, --wave, --depends-on, --affected, --protected and --date, and takes --no-color'],
     [['list', '--strict'], 'list does not read --strict; it reads --root, --config, --no-config, --format, --no-git, --color, --no-color, --ready and --archived'],
     [['lint', '--config', 'team.json', '--no-config'], '--config is given beside --no-config, which has the run read no configuration file; give one of the two'],
     [['lint', '--no-config', '--config', 'team.json'], '--config is given beside --no-config, which has the run read no configuration file; give one of the two'],
@@ -1115,6 +1119,48 @@ describe('init and new', () => {
     // The least a number may be is allowed.
     expect((await run(root, ['new', 'Third', '--wave', '0'])).out).toBe('wrote briefs/003_third.md\n');
     expect(readFileSync(join(root, 'briefs', '003_third.md'), 'utf8')).toContain('\nwave: 0\n');
+  });
+
+  it('scaffolds the scope given, with a glob\'s own commas kept, and refuses a list with a place that names nothing', async () => {
+    const root = dir('cli-new-scope');
+    await run(root, ['init']);
+    const made = await run(root, ['new', 'Scoped', '--affected', 'docs/{a,b}.md , src/auth/**', '--protected', '**/schema.ts']);
+    expect(made).toEqual({ code: EXIT_OK, out: 'wrote briefs/001_scoped.md\n', err: '' });
+    const text = readFileSync(join(root, 'briefs', '001_scoped.md'), 'utf8');
+    expect(text).toContain('\naffectedFiles: ["docs/{a,b}.md", "src/auth/**"]\nprotectedFiles: ["**/schema.ts"]\n---\n');
+    // As written, the scope reads back as given.
+    const listed = JSON.parse((await run(root, ['list', '--format', 'json'])).out) as { briefs: { affectedFiles: string[]; protectedFiles: string[] }[] };
+    expect(listed.briefs.map((b) => [b.affectedFiles, b.protectedFiles])).toEqual([[['docs/{a,b}.md', 'src/auth/**'], ['**/schema.ts']]]);
+    expect(await run(root, ['new', 'x', '--affected', 'src/a,,src/b'])).toEqual({
+      code: EXIT_ERROR,
+      out: '',
+      err: 'spec-brief: --affected is "src/a,,src/b", which names no pattern in one of its places; give it globs with one comma between each two, as in src/auth/**,src/db/schema.ts\n',
+    });
+    expect((await run(root, ['new', 'x', '--protected', 'a,'])).err).toBe(
+      'spec-brief: --protected is "a,", which names no pattern in one of its places; give it globs with one comma between each two, as in src/auth/**,src/db/schema.ts\n',
+    );
+    // A template takes the scope where it has a place for it, and is refused where it has none.
+    const held = plain('cli-new-scope-template', {
+      '.spec-brief.json': JSON.stringify({ template: 'tpl.md' }),
+      'briefs/.gitkeep': '',
+      'tpl.md': '---\nstatus: {status}\naffectedFiles: {affectedFiles}\nprotectedFiles: {protectedFiles}\n---\n\n# {id} {title}\n',
+    });
+    expect((await run(held, ['new', 'T', '--affected', 'src/**'])).code).toBe(EXIT_OK);
+    expect(readFileSync(join(held, 'briefs', '001_t.md'), 'utf8')).toContain('affectedFiles: ["src/**"]\nprotectedFiles: []\n');
+    const bare = plain('cli-new-scope-bare', { '.spec-brief.json': JSON.stringify({ template: 'tpl.md' }), 'briefs/.gitkeep': '', 'tpl.md': '# {id} {title}\n' });
+    expect(await run(bare, ['new', 'T', '--protected', 'src/db/**'])).toEqual({
+      code: EXIT_ERROR,
+      out: '',
+      err: 'spec-brief: the template tpl.md has no {protectedFiles} for the patterns given; write "protectedFiles: {protectedFiles}" in its front matter\n',
+    });
+    expect(readdirSync(join(bare, 'briefs'))).toEqual(['.gitkeep']);
+    expect((await run(bare, ['new', 'T'])).code).toBe(EXIT_OK);
+  });
+
+  it('says that no brief is ready, not that there are none, when briefs wait', async () => {
+    const root = plain('cli-list-none-ready', { 'briefs/001_a.md': goodBrief({ dependsOn: '[2]' }), 'briefs/002_b.md': goodBrief({ status: 'draft' }) });
+    expect(await run(root, ['list', '--ready'])).toEqual({ code: EXIT_OK, out: 'no brief is ready of the 2 listed; "spec-brief list" shows what each waits on\n', err: '' });
+    expect((await run(plain('cli-list-ready-empty', { 'briefs/.gitkeep': '' }), ['list', '--ready'])).out).toBe('no briefs\n');
   });
 
   it('fills the template a configuration names, and refuses in one line one that is a directory, or a junction to one, writing nothing', async () => {

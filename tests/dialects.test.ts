@@ -636,6 +636,8 @@ describe('configuration', () => {
       briefs: 'b',
       archive: 'b/done',
       files: '[0-9]*.md',
+      exclude: [],
+      template: null,
       id: { source: 'filename', separator: '_', digits: 3 },
       status: { field: 'status', draft: 'draft', active: 'active', deferred: 'deferred', archived: 'archived' },
       sections: [
@@ -654,7 +656,21 @@ describe('configuration', () => {
         refactor: { sections: [] },
         chore: { sections: [] },
       },
-      archiving: { tasks: 'all', dispositions: ['**Delegated', '**Accepted debt', '**Rejected'], banner: DEFAULT_CONFIG.archiving.banner, base: null },
+      sectionOrder: false,
+      placeholders: DEFAULT_CONFIG.placeholders,
+      fields: [],
+      archiving: {
+        tasks: 'all',
+        dispositions: ['**Delegated', '**Accepted debt', '**Rejected'],
+        banner: DEFAULT_CONFIG.archiving.banner,
+        rewriteLinks: true,
+        freeze: true,
+        base: null,
+      },
+      claims: { labels: {} },
+      registers: { settled: [] },
+      rules: {},
+      plugins: [],
     });
   });
 

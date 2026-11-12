@@ -123,7 +123,7 @@ function lineOf(brief: Brief, key: string): number {
 
 function protectedFinding(brief: Brief, path: string): Finding {
   return {
-    ...problem(brief, 'protected-file', 'error', lineOf(brief, 'protectedFiles'), `the round changed ${path}, which this brief protects`, 'revert the change, or record the departure in the brief before archiving it'),
+    ...problem(brief, 'protected-file', 'error', lineOf(brief, 'protectedFiles'), `the round changed ${path}, which this brief protects`, 'revert the change, or ask the person who approved the brief to rule on it (spec-harness escalate): a signed ruling, which a plugin that verifies rulings reads, lifts this'),
     path,
   };
 }

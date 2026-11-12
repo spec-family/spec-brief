@@ -25,7 +25,7 @@ import { readingIn, WITNESS_BUDGET } from './glob.js';
 import { configuredSeverity } from './lint.js';
 import { meet, type Overlap, type Scope, scopeOf, witnessText } from './scope.js';
 import { encodeLike } from './text.js';
-import type { Finding } from './types.js';
+import type { Finding, Severity } from './types.js';
 
 export interface ScheduleOptions {
   /** The files the tree holds, which say whether a literal path is a file or a directory. */
@@ -89,6 +89,12 @@ export interface Schedule {
   readonly unplaced: readonly Unplaced[];
   /** Dependency cycles among the scheduled briefs, each as a path back to its start. */
   readonly cycles: readonly (readonly Brief[])[];
+  /**
+   * Dependency cycles through a deferred brief. Its members wait on deferred
+   * work and are placed nowhere, so no wave is refused for them, and none of
+   * them can ever become ready.
+   */
+  readonly deferredCycles: readonly (readonly Brief[])[];
   /** Deferred briefs, which wait for their trigger and run in no wave. By id. */
   readonly deferred: readonly Brief[];
 }
@@ -190,14 +196,16 @@ export function schedule(corpus: Corpus, options: ScheduleOptions = {}): Schedul
     placements.push({ brief: next, declared: next.wave, proposed: wave, after, passed, unscoped: own.affected.length === 0, breaches });
   }
 
-  const cycles = dependencyCycles(corpus).filter((cycle) => cycle.every((b) => b.status !== 'deferred'));
+  const allCycles = dependencyCycles(corpus);
+  const cycles = allCycles.filter((cycle) => cycle.every((b) => b.status !== 'deferred'));
+  const deferredCycles = allCycles.filter((cycle) => !cycles.includes(cycle));
   const inCycle = new Set(cycles.flat());
   const unplaced = pending.map((brief): Unplaced => {
     const waitsOn = (dependencies.get(brief) as Brief[]).find((d) => !waveOf.has(d))!;
     const because = waitsOn.status === 'deferred' ? 'deferred' : inCycle.has(waitsOn) ? 'cycle' : 'unplaced';
     return { brief, waitsOn, because };
   });
-  return { first, placements, unplaced, cycles, deferred };
+  return { first, placements, unplaced, cycles, deferredCycles, deferred };
 }
 
 /** The briefs whose declared wave the schedule would change. */
@@ -248,11 +256,16 @@ export function scheduleFindings(corpus: Corpus, s: Schedule): Finding[] {
   const findings: Finding[] = [];
   const cycle = configuredSeverity(corpus, 'dependency-cycle');
   if (cycle !== null) {
-    for (const members of s.cycles) {
+    // A cycle through deferred work was left out, and the run passed what
+    // lint fails. It is a warning here until round 30: the exit code of a
+    // schedule that ran clean before does not change in the freeze.
+    const lenient: Severity = cycle === 'error' ? 'warning' : cycle;
+    const told = (c: readonly Brief[], severity: Severity): [readonly Brief[], Severity] => [c, severity];
+    for (const [members, severity] of [...s.cycles.map((c) => told(c, cycle)), ...s.deferredCycles.map((c) => told(c, lenient))]) {
       const start = members[0] as Brief;
       findings.push({
         rule: 'dependency-cycle',
-        severity: cycle,
+        severity,
         message: `dependencies form a cycle, so no wave can hold them: ${members.map(label).join(' -> ')}`,
         file: start.file,
         line: lineOfField(start, 'dependsOn') + 1,
