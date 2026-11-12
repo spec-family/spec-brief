@@ -826,6 +826,53 @@ describe('plugins', () => {
     expect(asked).toHaveLength(2);
   });
 
+  it('compares the brief with its copy where the round started, and asks a hook about the scope changes alone', async () => {
+    const started = goodBrief({ affectedFiles: '[src/a.ts]', protectedFiles: '[src/b.ts]' });
+    const read: string[][] = [];
+    const asked: WaiveContext[] = [];
+    const git: Git = {
+      commit: () => Promise.resolve({ sha: '1234567890ab', author: 'A', date: '' }),
+      mergeBase: () => Promise.resolve('fedcba9876543210'),
+      changes: () => Promise.resolve(['src/a.ts', 'src/b.ts', 'src/c.ts'].map((path) => ({ path, insertions: 1, deletions: 0 }))),
+      fileAt: (revision, path) => {
+        read.push([revision, path]);
+        return Promise.resolve(started);
+      },
+      dirty: () => Promise.resolve([]),
+      files: () => Promise.resolve(['src/a.ts', 'src/b.ts', 'src/c.ts']),
+      remoteUrl: () => Promise.resolve(null),
+    };
+    const ruled: Plugin = {
+      name: 'harness',
+      rules: [],
+      waive: (context) => {
+        asked.push(context);
+        return [{ rule: 'scope-changed', path: 'src/b.ts', reason: 'ruling R2 allows it' }];
+      },
+    };
+    const files = { 'briefs/001_a.md': goodBrief({ affectedFiles: '[src/a.ts]' }) };
+    const engine = new BriefEngine({ root: '/v', config: DEFAULT_CONFIG, configFile: null, fs: new MemoryFileSystem(files), git, plugins: [ruled] });
+    await engine.load();
+    const plan = await engine.planArchive('1', { base: 'main', date: '2026-11-12' });
+    expect(read).toEqual([['fedcba9876543210', 'briefs/001_a.md']]);
+    expect(asked).toHaveLength(1);
+    expect(asked[0]?.findings).toEqual([]);
+    expect(asked[0]?.warnings.map((f) => [f.rule, f.path, f.paths])).toEqual([['scope-changed', 'src/b.ts', ['src/b.ts']]]);
+    expect(plan.warnings.map((f) => [f.rule, f.severity, f.message])).toEqual([
+      ['out-of-scope', 'warning', 'the round changed 1 file(s) outside affectedFiles: src/c.ts'],
+      ['waived', 'note', 'harness waives scope-changed for src/b.ts: ruling R2 allows it'],
+    ]);
+    // A round named by its commit alone started at the commit's parent.
+    await engine.planArchive('1', { commit: 'HEAD', date: '2026-11-12' });
+    expect(read[1]).toEqual(['1234567890ab^', 'briefs/001_a.md']);
+    // A git that cannot read a file at a revision compares nothing, and a hook has nothing to be asked.
+    const { fileAt: _unread, ...blind } = git;
+    const unread = new BriefEngine({ root: '/v', config: DEFAULT_CONFIG, configFile: null, fs: new MemoryFileSystem(files), git: blind, plugins: [ruled] });
+    await unread.load();
+    expect((await unread.planArchive('1', { base: 'main', date: '2026-11-12' })).warnings.map((f) => f.rule)).toEqual(['out-of-scope']);
+    expect(asked).toHaveLength(2);
+  });
+
   it('stops the run when a waive hook throws or answers in the wrong shape', async () => {
     const git: Git = {
       commit: () => Promise.resolve({ sha: '1234567890ab', author: 'A', date: '' }),

@@ -39,6 +39,12 @@ export interface Git {
   mergeBase(a: string, b: string): Promise<string | null>;
   /** Files changed from `from` to `to`; with no `from`, the files `to` changed against its first parent. */
   changes(from: string | null, to: string): Promise<FileChange[]>;
+  /**
+   * A file as a revision has it, by its path from the root, or `null` where
+   * the revision has no such file. A git without it is one that cannot say,
+   * and what would be compared with the revision's copy is not.
+   */
+  fileAt?(revision: string, path: string): Promise<string | null>;
   /** Paths with uncommitted changes, untracked files included. */
   dirty(): Promise<string[]>;
   /** Every path git sees: tracked, or untracked and not ignored. A file a round just created counts. */
@@ -199,6 +205,13 @@ export class NodeGit implements Git {
     }
     if (!result.ok) throw new GitError(`git could not diff ${from ?? `${to}^`}..${to}: ${result.stderr.trim()}`);
     return parseNumstat(result.stdout);
+  }
+
+  async fileAt(revision: string, path: string): Promise<string | null> {
+    // "./" reads the path from the directory git runs in, which is the root,
+    // as every path here is; without it git reads it from the top of the work tree.
+    const result = await run(this.cwd, ['show', `${safeRevision(revision)}:./${path}`]);
+    return result.ok ? result.stdout : null;
   }
 
   async dirty(): Promise<string[]> {

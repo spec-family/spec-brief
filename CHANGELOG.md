@@ -27,6 +27,23 @@ what a run reports.
   message of each, empty for a brief read whole, whatever the configuration
   sets the rules to. The pretty table names such briefs beneath it. No field
   changes meaning: an unreadable list is still `[]`.
+- **`scope-changed`: a round can no longer loosen its own brief unseen.**
+  A round that dropped a file from its brief's `protectedFiles` on its own
+  branch, then changed the file, was reported as out of scope at most, a
+  warning, and `spec-harness audit` passed it. `archive` now compares the
+  brief with its copy where the changes are measured from, the merge base
+  with `--base` or the commit's parent with `--commit` alone, and reports
+  each pattern `protectedFiles` no longer covers and each `affectedFiles`
+  gained, naming the pattern and the files it let through. Only the scope
+  fields are compared, by what they cover: a tick, a ruling row, the banner
+  or a pattern rewritten to say the same is no change. A warning, which
+  `--strict` refuses; it becomes an error in round 30. A file whose
+  protection was dropped is reported there and not again as out of scope.
+- **A plugin may waive `scope-changed`**, by the pattern, as spec-harness
+  will for a signed ruling. A `waive` hook is handed the plan's
+  `scope-changed` warnings as `warnings`, beside the refusals in
+  `findings`, which are as they were, and is asked when there is one.
+  `Git` gains an optional `fileAt`; a git without it compares nothing.
 
 ### Added
 

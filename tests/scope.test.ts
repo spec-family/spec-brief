@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { type Glob, matchGlob, parseGlob, readingIn } from '../src/glob.js';
-import { contradictions, meet, patternsOf, type Scope, scopeOf } from '../src/scope.js';
+import { contradictions, meet, patternsOf, type Scope, scopeChanges, scopeOf } from '../src/scope.js';
 import { brief, goodBrief } from './helpers.js';
 
 /**
@@ -165,5 +165,50 @@ describe('a scope against its own protections', () => {
   it('has nothing to say about a scope that protects nothing', () => {
     expect(contradictions(scope(['src/**']))).toEqual({ covered: [], undecided: [] });
     expect(contradictions(scope(['src/**'], ['**']), 1)).toEqual({ covered: [], undecided: ['src/**'] });
+  });
+});
+
+describe('a scope against itself as the round found it', () => {
+  it('names each protection dropped and each affected pattern added, and nothing else', () => {
+    const before = scope(['src/auth/**'], ['src/db/schema.ts', 'docs/adr/**']);
+    expect(scopeChanges(before, scope(['src/auth/**', 'src/api/**'], ['docs/adr/**']))).toEqual([
+      { field: 'protectedFiles', pattern: 'src/db/schema.ts', undecided: false },
+      { field: 'affectedFiles', pattern: 'src/api/**', undecided: false },
+    ]);
+    // Narrowed, reordered or rewritten to say the same, the scope did not grow.
+    expect(scopeChanges(before, scope(['src/auth/login.ts'], ['docs/adr/**', 'src/db/schema.ts', 'src/db/**']))).toEqual([]);
+    expect(scopeChanges(before, scope(['src/auth/{a,b}/**', 'src/auth/*'], ['src/db/schema.ts', 'docs/adr/', 'docs/adr/**']))).toEqual([]);
+    expect(scopeChanges(scope(['src/**']), scope(['src/a/**', 'src/b.ts']))).toEqual([]);
+  });
+
+  it('counts a protection only partly kept as dropped', () => {
+    expect(scopeChanges(scope([], ['src/db/**']), scope([], ['src/db/schema.ts']))).toEqual([{ field: 'protectedFiles', pattern: 'src/db/**', undecided: false }]);
+    expect(scopeChanges(scope(['src/a/**']), scope(['src/**']))).toEqual([{ field: 'affectedFiles', pattern: 'src/**', undecided: false }]);
+  });
+
+  it('reads an affected list that empties as one that bounds nothing, and one that was empty as unbounded already', () => {
+    expect(scopeChanges(scope(['src/a/**', 'src/b.ts']), scope([]))).toEqual([{ field: 'affectedFiles', pattern: '**', undecided: false }]);
+    expect(scopeChanges(scope([]), scope(['src/**']))).toEqual([]);
+    expect(scopeChanges(scope([]), scope([]))).toEqual([]);
+  });
+
+  it('reads a pattern that does not parse as none, on either side', () => {
+    // A protection rewritten so that it cannot be read protects nothing.
+    expect(scopeChanges(scope([], ['src/db/**']), scope([], ['/src/db/**']))).toEqual([{ field: 'protectedFiles', pattern: 'src/db/**', undecided: false }]);
+    expect(scopeChanges(scope(['src/**']), scope(['/abs']))).toEqual([{ field: 'affectedFiles', pattern: '**', undecided: false }]);
+    // One that could not be read when the round started protected nothing to drop.
+    expect(scopeChanges(scope([], ['/src/db/**']), scope([], []))).toEqual([]);
+  });
+
+  it('reads a literal as the tree reads it, so a directory written with its slash is the same protection', () => {
+    const tree = readingIn(['src/db/schema.ts']);
+    const of = (protectedFiles: string[]): Scope => scopeOf(brief(goodBrief({ protectedFiles: JSON.stringify(protectedFiles) })), tree);
+    expect(scopeChanges(of(['src/db']), of(['src/db/']))).toEqual([]);
+    expect(scopeChanges(of(['src/db/schema.ts']), of(['src/db/schema.ts/']))).toEqual([{ field: 'protectedFiles', pattern: 'src/db/schema.ts', undecided: false }]);
+  });
+
+  it('says which it could not decide within its budget, and decides none of them by a guess', () => {
+    expect(scopeChanges(scope([], ['src/**']), scope([], ['**']), 1)).toEqual([{ field: 'protectedFiles', pattern: 'src/**', undecided: true }]);
+    expect(scopeChanges(scope(['**']), scope(['src/**']), 1)).toEqual([{ field: 'affectedFiles', pattern: 'src/**', undecided: true }]);
   });
 });

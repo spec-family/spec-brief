@@ -10,7 +10,7 @@ import type { Corpus } from './corpus.js';
 import { analyse, ARCHIVE_RULES, COLLISION_RULES, encodingProblems, inFrontMatter, problemField, type Rule, RULES } from './rules.js';
 import type { Finding, Severity, SeveritySetting } from './types.js';
 
-/** What a plugin's `waive` hook is asked about: one archival, refused. */
+/** What a plugin's `waive` hook is asked about: one archival, refused or warned of. */
 export interface WaiveContext {
   /** The absolute root: the directory holding the configuration. */
   readonly root: string;
@@ -19,9 +19,17 @@ export interface WaiveContext {
    * Every finding that refuses the archival, as a frozen copy: writing to it
    * throws, and the waivers are matched against the plan's own. A
    * `protected-file` finding names its `path`; an `out-of-scope` one lists its
-   * `paths`. Only those two can be waived.
+   * `paths`; a `scope-changed` one names the pattern as its `path`, and lists
+   * the files the change let through as its `paths`, and is waived by the
+   * pattern. Only those three can be waived.
    */
   readonly findings: readonly Finding[];
+  /**
+   * The warnings of the archival a plugin may waive: each `scope-changed`
+   * finding, which refuses only under `--strict`, and is then among
+   * `findings`.
+   */
+  readonly warnings: readonly Finding[];
   /** The base the round is measured from, as it was given; `null` when none was. */
   readonly base: string | null;
   /** The commit the round landed as; `null` when none was read. */

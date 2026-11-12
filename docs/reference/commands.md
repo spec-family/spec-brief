@@ -160,9 +160,10 @@ Closes a round. Refused, with every reason, when:
 - the working tree holds uncommitted work outside the brief directories (`--allow-dirty` to proceed);
 - the round's commit changed a file in `protectedFiles` - one refusal per file, naming it, unless a spec-brief plugin that verifies rulings [waives it](plugins.md#waiving-a-refusal).
 
-Two warnings, which `--strict` turns into refusals:
+Three warnings, which `--strict` turns into refusals:
 
 - Changes outside `affectedFiles` are a warning, and an error under `--strict`.
+- A round that changed the scope it runs under gets `scope-changed`. The brief is compared with its copy where the changes are measured from - the merge base with `--base` or `archiving.base`, the commit's parent with `--commit` alone - and each pattern `protectedFiles` no longer covers, and each `affectedFiles` gained, is one finding, naming the pattern and the files the round changed that it let through. Only the two scope fields are compared, by what they cover, so a tick, a ruling row, the banner, or a pattern rewritten to say the same is no change; an `affectedFiles` that empties bounds nothing, and is one. A file whose protection the round dropped is reported there and not again as out of scope. A brief the round wrote, which the merge base does not have, is not compared. A plugin that verifies rulings may [waive it](plugins.md#waiving-a-refusal) by the pattern.
 - A scope is never passed by checks that measured nothing. When the files the round changed are unknown - no `--commit`, `--base` or `archiving.base`, `--no-git`, or a commit already in the base branch, as on `main` after the merge - a brief that declares one gets `scope-unmeasured`, a warning, and a refusal under `--strict`.
 
 Otherwise, in one transaction, it:

@@ -8,18 +8,19 @@
  * makes the ceremony testable without a disk and previewable without risk.
  */
 
-import { BANNER_CLOSE, BANNER_OPEN, type Brief, lineOfField } from './brief.js';
+import { BANNER_CLOSE, BANNER_OPEN, type Brief, lineOfField, parseBrief } from './brief.js';
 import type { Config } from './config.js';
 import { type Corpus, resolveDependency } from './corpus.js';
 import { editable, type FrontMatter, readFrontMatter, removeEntry, renderScalar, setEntry } from './frontmatter.js';
 import type { CommitInfo, FileChange } from './git.js';
-import { type Glob, matchGlob, parseGlob } from './glob.js';
+import { type Glob, matchGlob, parseGlob, readingIn } from './glob.js';
 import { INTEGRITY_FIELD, integrityOf } from './integrity.js';
 import { dirOf, linesLinkingTo, normalisePath, rewriteLinks } from './links.js';
 import { configuredSeverity } from './lint.js';
 import type { Scan } from './markdown.js';
 import { claimLabel, lookUp } from './references.js';
-import { encodeLike, fillTemplate, joinLines, labelMatches, templateHoles } from './text.js';
+import { type ScopeChange, scopeChanges, scopeOf } from './scope.js';
+import { encodeLike, fillTemplate, inWords, joinLines, labelMatches, templateHoles } from './text.js';
 import type { Finding, Severity } from './types.js';
 
 export interface PullRequest {
@@ -53,6 +54,14 @@ export interface ArchiveRequest {
    * read as a round that stayed in scope.
    */
   readonly unmeasured?: Unmeasured | undefined;
+  /**
+   * The brief as the revision the changes are measured from has it: `text`
+   * is `null` where that revision has no such file. Without it the brief's
+   * own scope is not compared with what the round started from.
+   */
+  readonly before?: { readonly revision: string; readonly text: string | null } | undefined;
+  /** The files of the tree, which decide whether a literal scope pattern names a directory. */
+  readonly repoFiles?: readonly string[] | null | undefined;
   /** Uncommitted paths, when the working tree was read. */
   readonly dirty?: readonly string[] | undefined;
   readonly allowDirty?: boolean | undefined;
@@ -135,6 +144,78 @@ function outOfScopeFinding(brief: Brief, paths: readonly string[], strict: boole
     ),
     paths,
   };
+}
+
+/**
+ * How the round changed its own brief's scope: each pattern its
+ * `protectedFiles` lost and each its `affectedFiles` gained since the
+ * revision it is measured from, one finding each. A round that may loosen
+ * the brief it runs under is bounded by nothing: it drops a file from the
+ * protections, changes the file, and the archive saw a change in scope at
+ * most. Only the two scope fields are compared, so a tick, a ruling row, a
+ * banner or any other edit of the brief is none. Each names the pattern, as
+ * a waiver names it, and the files the round changed that the change let
+ * through, which the brief as it started would have refused or called out of
+ * scope. A brief the revision does not have was written by the round, and a
+ * person reviews it whole.
+ */
+/**
+ * What a scope change says, measured from the revision `at`; `before` is
+ * the brief's `affectedFiles` there, which a scope that bounds nothing any
+ * more names.
+ */
+export function scopeChangeMessage(change: ScopeChange, at: string, before: readonly string[]): string {
+  const { field, pattern, undecided } = change;
+  if (field === 'protectedFiles') {
+    return undecided
+      ? `whether protectedFiles still covers "${pattern}", as it did at ${at}, is undecided: the search met its budget`
+      : `protectedFiles no longer covers "${pattern}", as it did at ${at}`;
+  }
+  if (pattern === '**') {
+    return `affectedFiles no longer bounds the round: it names no pattern that can be read, and named ${inWords(before.map((p) => `"${p}"`))} at ${at}`;
+  }
+  return undecided
+    ? `whether affectedFiles covered "${pattern}" at ${at} is undecided: the search met its budget`
+    : `affectedFiles covers "${pattern}", which it did not at ${at}`;
+}
+
+/** The files the round changed that `own` matches and none of `unless` does. */
+function letThrough(work: readonly FileChange[], own: Glob, unless: readonly Glob[]): string[] {
+  return work.filter((c) => matchGlob(own, c.path) && !unless.some((g) => matchGlob(g, c.path))).map((c) => c.path);
+}
+
+function scopeChangedFindings(corpus: Corpus, brief: Brief, request: ArchiveRequest, work: readonly FileChange[], severity: Severity): Finding[] {
+  const before = request.before;
+  if (before === undefined || before.text === null) return [];
+  const old = parseBrief(brief.file, before.text, corpus.config, brief.phase);
+  const reading = readingIn(request.repoFiles ?? null);
+  // A commit by its short hash, and its parent by the short hash and a caret.
+  const at = before.revision.endsWith('^') ? `${before.revision.slice(0, 7)}^` : before.revision.slice(0, 7);
+  const kept = globs(brief.protectedFiles);
+  const bound = globs(old.affectedFiles);
+  return scopeChanges(scopeOf(old, reading), scopeOf(brief, reading)).map((change) => {
+    const { field, pattern } = change;
+    // Every pattern a change names parses, as scopeChanges read it, and the
+    // "**" of a scope that bounds nothing matches every file.
+    const own = globs([pattern])[0]!;
+    // A protection dropped lets through what the brief still protects
+    // nowhere; a scope widened, what it did not cover and does not protect.
+    const paths = letThrough(work, own, field === 'protectedFiles' ? kept : [...bound, ...kept]);
+    const message = scopeChangeMessage(change, at, old.affectedFiles);
+    return {
+      ...problem(
+        brief,
+        'scope-changed',
+        severity,
+        lineOf(brief, field),
+        paths.length === 0 ? message : `${message}, and the round changed ${listed(paths)}`,
+        `a round does not change the scope it runs under: restore ${field} as ${at} has it, or have the person who approved the brief rule on the change (spec-harness escalate)`,
+      ),
+      subject: `${field}: ${pattern}`,
+      path: pattern,
+      paths,
+    };
+  });
 }
 
 /** Where an archive rule's finding goes: an error refuses, and under --strict a warning refuses as an error, as out-of-scope does. */
@@ -536,13 +617,20 @@ export function planArchive(corpus: Corpus, brief: Brief, request: ArchiveReques
   for (const change of work) {
     if (protectedGlobs.some((g) => matchGlob(g, change.path))) blocking.push(protectedFinding(brief, change.path));
   }
+  const changedSeverity = configuredSeverity(corpus, 'scope-changed');
+  const scopeChanged = changedSeverity === null ? [] : scopeChangedFindings(corpus, brief, request, work, changedSeverity);
+  // A file the brief protected when the round started, and no longer does, is
+  // reported once, with the protection the round dropped. A widened scope's
+  // files are inside affectedFiles, or there is none to be outside of.
+  const unguarded = new Set(scopeChanged.flatMap((f) => f.paths!));
   // A protected file is reported once, as protected, and not again as out of scope.
-  const unprotected = work.filter((c) => !protectedGlobs.some((g) => matchGlob(g, c.path)));
+  const unprotected = work.filter((c) => !protectedGlobs.some((g) => matchGlob(g, c.path)) && !unguarded.has(c.path));
   const outside = affectedGlobs.length === 0 ? [] : unprotected.filter((c) => !affectedGlobs.some((g) => matchGlob(g, c.path)));
   if (outside.length > 0) {
     const finding = outOfScopeFinding(brief, outside.map((c) => c.path), request.strict === true);
     (request.strict === true ? blocking : warnings).push(finding);
   }
+  for (const finding of scopeChanged) place(finding, request.strict === true, blocking, warnings);
   const scopeSeverity = configuredSeverity(corpus, 'scope-unmeasured');
   const unmeasured = scopeSeverity === null ? null : unmeasuredScope(brief, request, scopeSeverity);
   if (unmeasured !== null) place(unmeasured, request.strict === true, blocking, warnings);
@@ -614,19 +702,31 @@ export interface Waiver {
 }
 
 /**
- * The refusals a plugin may lift. A tool that verifies a ruling can say a
- * protected file was allowed to change, or that a file outside the scope was;
+ * The refusals and warnings a plugin may lift. A tool that verifies a ruling
+ * can say a protected file was allowed to change, that a file outside the
+ * scope was, or that the brief's scope was changed by a person's decision;
  * whether a round is done is spec-brief's to say.
  */
-export const WAIVABLE: readonly string[] = ['protected-file', 'out-of-scope'];
+export const WAIVABLE: readonly string[] = ['protected-file', 'out-of-scope', 'scope-changed'];
+
+/** Whether a waiver names a finding: by its path, or for out-of-scope by one of its paths. */
+function waives(waiver: Waiver, finding: Finding): boolean {
+  if (finding.rule !== waiver.rule) return false;
+  // A scope change is waived by the pattern, as a whole: the files it let
+  // through are what the pattern let through, and not each a change of scope.
+  if (finding.rule === 'scope-changed') return finding.path === waiver.path;
+  return finding.path === waiver.path || finding.paths?.includes(waiver.path) === true;
+}
 
 /**
- * The plan with the refusals plugins waived turned into notes. A waiver
- * matches a blocking finding by rule and path: a protected-file finding is
- * replaced by the note, and an out-of-scope finding loses the path and goes
- * when none is left. A waiver that matches nothing changes nothing, and one
- * for any other rule is ignored with a warning, which refuses under --strict
- * as any warning does.
+ * The plan with the findings plugins waived turned into notes. A waiver
+ * matches a refusal by rule and path, or a scope-changed warning by its
+ * pattern: a protected-file or scope-changed finding is replaced by the note,
+ * and an out-of-scope refusal loses the path and goes when none is left. An
+ * out-of-scope warning is left as it is: what a plugin lifts is what stops an
+ * archival, and a scope change, which a person must see either way. A waiver
+ * that matches nothing changes nothing, and one for any other rule is ignored
+ * with a warning, which refuses under --strict as any warning does.
  */
 export function applyWaivers(plan: Plan, waivers: readonly { readonly plugin: string; readonly waiver: Waiver }[], strict = false): Plan {
   const { brief } = plan;
@@ -639,17 +739,19 @@ export function applyWaivers(plan: Plan, waivers: readonly { readonly plugin: st
         'waiver-ignored',
         'warning',
         1,
-        `${plugin} asked to waive ${waiver.rule} for ${waiver.path}; a plugin may waive only ${WAIVABLE.join(' and ')}`,
+        `${plugin} asked to waive ${waiver.rule} for ${waiver.path}; a plugin may waive only ${inWords(WAIVABLE)}`,
         `report it to the plugin's authors: ${waiver.rule} is spec-brief's to decide`,
       );
       place(ignored, strict, blocking, warnings);
       continue;
     }
-    const at = blocking.findIndex((f) => f.rule === waiver.rule && (f.path === waiver.path || f.paths?.includes(waiver.path) === true));
+    const refused = blocking.findIndex((f) => waives(waiver, f));
+    const list = refused >= 0 ? blocking : warnings;
+    const at = refused >= 0 ? refused : warnings.findIndex((f) => f.rule === 'scope-changed' && waives(waiver, f));
     if (at < 0) continue;
-    const found = blocking[at] as Finding;
-    const rest = (found.paths ?? []).filter((p) => p !== waiver.path);
-    blocking.splice(at, 1, ...(rest.length > 0 ? [outOfScopeFinding(brief, rest, true)] : []));
+    const found = list[at] as Finding;
+    const rest = found.rule === 'out-of-scope' ? found.paths!.filter((p) => p !== waiver.path) : [];
+    list.splice(at, 1, ...(rest.length > 0 ? [outOfScopeFinding(brief, rest, true)] : []));
     warnings.push({
       ...problem(brief, 'waived', 'note', found.line, `${plugin} waives ${waiver.rule} for ${waiver.path}: ${waiver.reason}`, 'review the waiver with the round; it stands where the refusal was'),
       path: waiver.path,

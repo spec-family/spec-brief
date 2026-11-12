@@ -897,6 +897,11 @@ export const COLLISION_RULES: readonly RuleInfo[] = [
  */
 export const ARCHIVE_RULES: readonly RuleInfo[] = [
   {
+    id: 'scope-changed',
+    severity: 'warning',
+    description: "A round leaves its own brief's scope as it started: no pattern dropped from protectedFiles, none added to affectedFiles.",
+  },
+  {
     id: 'scope-unmeasured',
     severity: 'warning',
     description: 'A brief that declares a scope is archived against the changes its round made.',
