@@ -11,7 +11,7 @@
 import { BUILT_IN_FIELDS, type Brief, knownFields, lineOfField } from './brief.js';
 import { type Config, type SectionRule, statusWords, typeSections } from './config.js';
 import { type Corpus, cycleSubject, dependencyCycles, duplicateIds, idKey, resolveDependency } from './corpus.js';
-import { findEntry } from './frontmatter.js';
+import { findEntry, keyName } from './frontmatter.js';
 import { integrityOf } from './integrity.js';
 import { literal } from './literal.js';
 import { type Glob, hasExtension, held, isGlobSyntax, matchesAny, parseGlob, readingIn, treeOf, WITNESS_BUDGET, writtenAlternatives } from './glob.js';
@@ -130,7 +130,87 @@ function live(check: (context: RuleContext) => RuleResult[]): (context: RuleCont
 
 const SCOPE_FIELDS = literal(['affectedFiles', 'protectedFiles']);
 
-const quoted = (items: readonly string[]): string => inWords(items.map((item) => `"${item}"`));
+/** What the encoding rule found: a problem with the file as a whole, or a line. */
+export interface EncodingProblem {
+  /** 0-based. */
+  readonly line: number;
+  /** Nothing of the file was read as written: every other finding on it is noise. */
+  readonly whole: boolean;
+  readonly message: string;
+  readonly hint: string;
+}
+
+/**
+ * Text spec-brief cannot read as it was meant: UTF-16, which decoded as
+ * UTF-8 has a NUL beside every ASCII character, and lines ended by a carriage
+ * return alone. Either leaves the front matter unread, and the brief was
+ * reported as missing every section and its status, which sent the reader to
+ * fix what was never wrong. A lone CR among LF lines leaves the file read,
+ * but joins two of its lines into one: in the front matter, a field vanishes
+ * into the value before it.
+ */
+export function encodingProblems(brief: Brief): EncodingProblem[] {
+  if (brief.text.includes('\u0000')) {
+    return [
+      {
+        line: 0,
+        whole: true,
+        message: 'holds NUL characters, as UTF-16 text does; spec-brief reads UTF-8, so nothing in the brief was read',
+        hint: 'save the brief as UTF-8; Windows PowerShell 5.1 writes UTF-16 with ">" and Out-File unless told -Encoding utf8',
+      },
+    ];
+  }
+  if (!brief.text.includes('\r')) return [];
+  if (!brief.text.includes('\n')) {
+    return [
+      {
+        line: 0,
+        whole: true,
+        message: 'ends its lines with a carriage return (CR) alone, which spec-brief does not read as a line break, so the brief was read as one line',
+        hint: 'save the brief with LF or CRLF line endings',
+      },
+    ];
+  }
+  // A CR before an LF ended its line, and the lines were split there.
+  const lines = brief.lines.flatMap((line, i) => (line.includes('\r') ? [i] : []));
+  if (lines.length === 0) return [];
+  const first = lines[0]!;
+  const more = lines.length - 1;
+  return [
+    {
+      line: first,
+      whole: false,
+      message: `holds a carriage return (CR) with no line feed after it, which spec-brief reads as a space, not a line break${more === 0 ? '' : `; ${more} more line(s) do too`}`,
+      hint: 'end every line with LF or CRLF',
+    },
+  ];
+}
+
+/**
+ * The front-matter key a reading rule's finding is about, as spec-brief or
+ * the configuration spells it, or `null` for the file or the block as a
+ * whole: the text, a block never closed, TOML, a line that is no key.
+ */
+export function problemField(rule: string, brief: Brief, config: Config, result: RuleResult): string | null {
+  // Both rules name what they are about by the field first: `field` by the
+  // field alone, `glob` by the field, a colon and the pattern.
+  if (rule === 'field' || rule === 'glob') return result.subject!.split(':')[0]!;
+  if (rule !== 'front-matter') return null;
+  // A front-matter finding is of a block, so there is one.
+  const entry = brief.frontMatter!.entries.find((e) => e.line === result.line - 1);
+  if (entry === undefined) return null;
+  const names = [...BUILT_IN_FIELDS, ...config.fields];
+  if (config.status.field !== null) names.push(config.status.field);
+  return names.find((name) => keyName(name) === entry.name) ?? entry.key;
+}
+
+/** Whether a 0-based line is in the front matter, or where a block would have opened. */
+export function inFrontMatter(brief: Brief, line: number): boolean {
+  const block = brief.frontMatter;
+  return line === 0 || (block !== null && (block.close === -1 || line <= block.close));
+}
+
+const quoted =(items: readonly string[]): string => inWords(items.map((item) => `"${item}"`));
 
 /** Alternatives, each quoted: `"decided" or "done"`. */
 const either = (items: readonly string[]): string => items.map((item) => `"${item}"`).join(' or ');
@@ -234,6 +314,18 @@ export function scopeContradiction(brief: Brief, repoFiles: readonly string[] | 
 }
 
 export const RULES: readonly Rule[] = [
+  {
+    id: 'encoding',
+    severity: 'error',
+    description: 'A brief is UTF-8 text with lines ended by LF or CRLF.',
+    // A line with a lone CR is still read, so it is a warning: the rule is
+    // new, and a brief that passed before it keeps passing. A brief none of
+    // which was read failed before it on every section it seemed to lack.
+    check: ({ brief }) =>
+      encodingProblems(brief).map(
+        (p): RuleResult => ({ line: at(p.line), message: p.message, hint: p.hint, severity: p.whole ? undefined : 'warning' }),
+      ),
+  },
   {
     id: 'front-matter',
     severity: 'error',

@@ -16,7 +16,7 @@ import type { Brief } from './brief.js';
 import type { Config, SectionRule } from './config.js';
 import type { CollisionReport, Overlap } from './collisions.js';
 import { idKey } from './corpus.js';
-import { summarise } from './lint.js';
+import { type ReadingProblem, summarise } from './lint.js';
 import { literal } from './literal.js';
 import { ARCHIVE_RULES, COLLISION_RULES, RULES } from './rules.js';
 import { type Breach, breachReasons, holds, moves, type Passed, reasons, type Schedule } from './schedule.js';
@@ -316,6 +316,8 @@ export interface ListRow {
   readonly brief: Brief;
   readonly ready: boolean;
   readonly waitingOn: readonly string[];
+  /** What kept the brief from being read whole; see `readingProblems`. */
+  readonly problems?: readonly ReadingProblem[] | undefined;
 }
 
 export function prettyList(rows: readonly ListRow[], style: Style): string {
@@ -331,7 +333,14 @@ export function prettyList(rows: readonly ListRow[], style: Style): string {
       shownTitle(brief),
     ]),
   );
-  return [paint(style, 'dim', lines[0] as string), ...lines.slice(1)].join('\n');
+  const out = [paint(style, 'dim', lines[0] as string), ...lines.slice(1)];
+  // A row reads the same whether a field was empty or could not be read, so
+  // the briefs that were not read whole are named beneath it.
+  const unread = rows.filter((row) => (row.problems ?? []).length > 0).map((row) => row.brief.file);
+  if (unread.length > 0) {
+    out.push('', paint(style, 'yellow', `not read whole: ${unread.join(', ')}`), paint(style, 'dim', 'spec-brief lint names what to fix'));
+  }
+  return out.join('\n');
 }
 
 export function prettyMatrix(report: CollisionReport, style: Style): string {

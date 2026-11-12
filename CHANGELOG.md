@@ -11,6 +11,34 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
+## Unreleased
+
+### Security
+
+- **`list --format json` says which briefs were not read whole.** A field
+  whose value could not be read was listed as empty: with
+  `protectedFiles: [src/loans.js, docs/**` and the `]` missing, the row read
+  `"protectedFiles": []`, the same as a brief that protects nothing, and
+  spec-harness, which guards writes by that list, let every write through.
+  The same held for a pattern that starts with `/`, a YAML anchor, front
+  matter never closed, TOML, a UTF-16 brief and one whose lines end with a
+  carriage return alone. Each row now carries `problems`: the rule, the
+  field (`null` for the text or the block as a whole), the line and the
+  message of each, empty for a brief read whole, whatever the configuration
+  sets the rules to. The pretty table names such briefs beneath it. No field
+  changes meaning: an unreadable list is still `[]`.
+
+### Added
+
+- **`encoding`**, an error: a brief that is UTF-16, or whose lines end with
+  a carriage return alone, gets this one finding and no other. It was
+  reported as missing its status and every section, which sent the reader
+  to fix what was never wrong; such a brief failed lint before and fails it
+  now, by its real cause. A lone CR among LF lines, read as a space, which
+  in the front matter joins two fields into one, is a warning at the first
+  line holding one. With the rule `off`, the other rules speak as before.
+  27 lint rules and 5 collision rules.
+
 ## 0.14.0
 
 `--format github` annotates a note only under `--verbose`, which is new,

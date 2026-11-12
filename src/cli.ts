@@ -19,7 +19,7 @@ import { idKey } from './corpus.js';
 import { BriefEngine, EngineError, isDate, today } from './engine.js';
 import { NodeFileSystem } from './fs.js';
 import { GitError } from './git.js';
-import { failing, sortFindings, summarise } from './lint.js';
+import { failing, readingProblems, sortFindings, summarise } from './lint.js';
 import { normalisePath } from './links.js';
 import {
   briefJson,
@@ -758,15 +758,16 @@ async function runList(run: Run): Promise<number> {
   engine.requireBriefs();
   const briefs = flag(run.values, 'archived') ? engine.corpus.briefs : engine.corpus.live;
   const ready = new Set(engine.ready());
+  const problems = await readingProblems(engine.corpus, briefs);
   const rows: ListRow[] = briefs
-    .map((brief) => ({ brief, ready: ready.has(brief), waitingOn: engine.waitingOn(brief) }))
+    .map((brief) => ({ brief, ready: ready.has(brief), waitingOn: engine.waitingOn(brief), problems: problems.get(brief)! }))
     .filter((row) => !flag(run.values, 'ready') || row.ready);
   if (run.format === 'json') {
     const { keep, ...read } = engine.inputs();
     run.out(
       jsonDocument('list', run.version, {
         ok: true,
-        briefs: rows.map((r) => briefJson(r.brief, { ready: r.ready, waitingOn: r.waitingOn })),
+        briefs: rows.map((r) => briefJson(r.brief, { ready: r.ready, waitingOn: r.waitingOn, problems: r.problems })),
         sections: sectionsJson(engine.config),
         // What the answer was read from, for a tool that would give it again
         // without starting this one, and the version that read it.

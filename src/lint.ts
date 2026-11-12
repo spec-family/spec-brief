@@ -7,7 +7,7 @@ import type { Waiver } from './archive.js';
 import type { Brief } from './brief.js';
 import { ConfigError } from './config.js';
 import type { Corpus } from './corpus.js';
-import { analyse, ARCHIVE_RULES, COLLISION_RULES, type Rule, RULES } from './rules.js';
+import { analyse, ARCHIVE_RULES, COLLISION_RULES, encodingProblems, inFrontMatter, problemField, type Rule, RULES } from './rules.js';
 import type { Finding, Severity, SeveritySetting } from './types.js';
 
 /** What a plugin's `waive` hook is asked about: one archival, refused. */
@@ -118,8 +118,14 @@ export async function lint(corpus: Corpus, options: LintOptions = {}): Promise<F
   const shared = analyse(corpus);
   const targets = options.only ?? corpus.briefs;
   const findings: Finding[] = [];
+  const encoding = active.some((r) => r.id === 'encoding');
   for (const brief of targets) {
+    // A brief none of which was read has one finding, its encoding: the
+    // sections and the status it seemed to lack are not there to fix. With
+    // the rule off the others still speak, so such a brief never reads clean.
+    const unread = encoding && encodingProblems(brief).some((p) => p.whole);
     for (const { id, rule, severity, options: ruleOptions } of active) {
+      if (unread && id !== 'encoding') continue;
       const results = await rule.check({
         brief,
         corpus,
@@ -145,6 +151,52 @@ export async function lint(corpus: Corpus, options: LintOptions = {}): Promise<F
     }
   }
   return sortFindings(findings);
+}
+
+/** The rules whose findings say a brief was not read whole, in the order `list` gives its problems. */
+export const READING_RULES: readonly string[] = ['encoding', 'front-matter', 'field', 'glob'];
+
+/** Something that kept a brief from being read whole. */
+export interface ReadingProblem {
+  readonly rule: string;
+  /** The front-matter key it is about, as spec-brief spells it; `null` for the file or the block as a whole. */
+  readonly field: string | null;
+  /** 1-based. */
+  readonly line: number;
+  readonly message: string;
+}
+
+/**
+ * What kept each brief from being read whole: text that is not UTF-8 with LF
+ * or CRLF lines, front matter that does not parse, a field whose value cannot
+ * be read, a scope pattern that cannot. Each leaves a field read as empty,
+ * and `list` reports an empty `protectedFiles` the same whether the brief
+ * protects nothing or its protection could not be read; a tool that guards
+ * writes by it must tell the two apart.
+ *
+ * Asked of the rules themselves, whatever the configuration sets them to: a
+ * rule turned off says nothing in lint, and the protection is unread all the
+ * same. A line with a lone CR in the body leaves every field read, and is not
+ * one of them.
+ */
+export async function readingProblems(corpus: Corpus, briefs: readonly Brief[]): Promise<Map<Brief, ReadingProblem[]>> {
+  const rules = READING_RULES.map((id) => RULES.find((rule) => rule.id === id)!);
+  const shared = analyse(corpus);
+  const found = new Map<Brief, ReadingProblem[]>();
+  for (const brief of briefs) {
+    const problems: ReadingProblem[] = [];
+    for (const rule of rules) {
+      const results = await rule.check({ brief, corpus, config: corpus.config, repoFiles: null, documents: new Map(), shared });
+      for (const result of results) {
+        // Only an encoding finding can stand below the block: every other
+        // reading rule reports a line of it, or its first.
+        if (!inFrontMatter(brief, result.line - 1)) continue;
+        problems.push({ rule: rule.id, field: problemField(rule.id, brief, corpus.config, result), line: result.line, message: result.message });
+      }
+    }
+    found.set(brief, problems);
+  }
+  return found;
 }
 
 /** Strings by code unit, which is the same order on every host and in every locale. */

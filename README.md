@@ -109,7 +109,7 @@ Every privilege change issues a new session token and invalidates the old one.
 
 | What | Rules |
 | --- | --- |
-| The front matter | `front-matter`, `field`, `unknown-field`, `status`, `id`, `duplicate-id`, `title`, `unknown-type` |
+| The text and its front matter | `encoding`, `front-matter`, `field`, `unknown-field`, `status`, `id`, `duplicate-id`, `title`, `unknown-type` |
 | The sections | `missing-section`, `duplicate-section`, `empty-section`, `placeholder`, `missing-checklist`, `must-contain`, `section-order` |
 | Dependencies and deferred work | `dependency`, `dependency-cycle`, `wave-order`, `deferral-trigger` |
 | Claims raised and rows awaited | `raises`, `awaits` |

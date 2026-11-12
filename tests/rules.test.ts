@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { isReady } from '../src/corpus.js';
 import { integrityOf } from '../src/integrity.js';
-import { checkRuleIds, failing, lint, ruleIds, severityOf, sortFindings, summarise } from '../src/lint.js';
+import { checkRuleIds, failing, lint, readingProblems, ruleIds, severityOf, sortFindings, summarise } from '../src/lint.js';
 import { type Rule, scopeContradiction } from '../src/rules.js';
 import type { Finding } from '../src/types.js';
 import { brief, config, corpusOf, goodBrief } from './helpers.js';
@@ -71,6 +71,167 @@ describe('front matter and fields', () => {
     const typo = await findings({ [A]: goodBrief({ dependOn: '[b]' }) });
     expect(typo[0]?.hint).toBe('did you mean "dependsOn"? If not, list "dependOn" under "fields" in the configuration');
     expect(await findings({ [A]: goodBrief({ owner: 'x' }) }, config({ fields: ['owner'] }))).toEqual([]);
+  });
+});
+
+describe('encoding', () => {
+  // UTF-16LE with its byte-order mark, decoded as UTF-8, as the file system reads it.
+  const utf16 = (text: string): string => Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')]).toString('utf8');
+
+  it('reports a UTF-16 brief once, as its encoding, and not as every section and field it seemed to lack', async () => {
+    const found = await findings({ [A]: utf16(goodBrief()) });
+    expect(found.map((f) => [f.rule, f.severity, f.line, f.message, f.hint])).toEqual([
+      [
+        'encoding',
+        'error',
+        1,
+        'holds NUL characters, as UTF-16 text does; spec-brief reads UTF-8, so nothing in the brief was read',
+        'save the brief as UTF-8; Windows PowerShell 5.1 writes UTF-16 with ">" and Out-File unless told -Encoding utf8',
+      ],
+    ]);
+  });
+
+  it('reports a brief whose lines end with a lone CR once, as read as one line', async () => {
+    const found = await findings({ [A]: goodBrief().replaceAll('\n', '\r') });
+    expect(found.map((f) => [f.rule, f.severity, f.line, f.message, f.hint])).toEqual([
+      [
+        'encoding',
+        'error',
+        1,
+        'ends its lines with a carriage return (CR) alone, which spec-brief does not read as a line break, so the brief was read as one line',
+        'save the brief with LF or CRLF line endings',
+      ],
+    ]);
+  });
+
+  it('warns of a lone CR among LF lines at the first line holding one, and counts the rest', async () => {
+    const text = goodBrief().replace('The tree is better.', 'The tree\ris better.').replace('- Nothing else changes.', '- Nothing\relse\rchanges.');
+    const found = await findings({ [A]: text });
+    expect(found.map((f) => [f.rule, f.severity, f.line, f.message, f.hint])).toEqual([
+      [
+        'encoding',
+        'warning',
+        9,
+        'holds a carriage return (CR) with no line feed after it, which spec-brief reads as a space, not a line break; 1 more line(s) do too',
+        'end every line with LF or CRLF',
+      ],
+    ]);
+    const one = await findings({ [A]: goodBrief().replace('The tree is better.', 'The tree\ris better.') });
+    expect(one.map((f) => f.message)).toEqual(['holds a carriage return (CR) with no line feed after it, which spec-brief reads as a space, not a line break']);
+  });
+
+  it('reads a brief of one line with no line break at all', async () => {
+    expect((await findings({ [A]: '# A brief' })).filter((f) => f.rule === 'encoding')).toEqual([]);
+  });
+
+  it('reads CRLF and a byte-order mark as UTF-8 text', async () => {
+    expect(await findings({ [A]: `${String.fromCharCode(0xfeff)}${goodBrief().replaceAll('\n', '\r\n')}` })).toEqual([]);
+  });
+
+  it('leaves the other rules speaking when the encoding rule is off, so an unread brief never reads clean', async () => {
+    const hit = await rulesHit({ [A]: utf16(goodBrief()) }, config({ rules: { encoding: 'off' } }));
+    expect(hit).toContain('status@1');
+    expect(hit).toContain('missing-section@1');
+    expect(hit).not.toContain('encoding@1');
+    // Lowered, it still stands alone.
+    expect(await rulesHit({ [A]: utf16(goodBrief()) }, config({ rules: { encoding: 'warning' } }))).toEqual(['encoding@1']);
+  });
+
+  it('silences nothing for a lone CR, which leaves the brief read', async () => {
+    const text = goodBrief().replace('# A brief\n', '').replace('The tree is better.', 'The tree\ris better.');
+    expect(await rulesHit({ [A]: text })).toEqual(['title@4', 'encoding@8']);
+  });
+});
+
+describe('what kept a brief from being read whole', () => {
+  async function problems(text: string, cfg = config(), file = A): Promise<unknown[]> {
+    const corpus = corpusOf({ [file]: text }, cfg);
+    return (await readingProblems(corpus, corpus.briefs)).get(corpus.briefs[0]!)!.map((p) => [p.rule, p.field, p.line, p.message]);
+  }
+
+  it('is nothing for a brief read whole', async () => {
+    expect(await problems(goodBrief({ affectedFiles: '[src/a.ts]', protectedFiles: '[src/b.ts]' }))).toEqual([]);
+  });
+
+  it('names the field whose value could not be read, and the pattern that could not', async () => {
+    expect(await problems(goodBrief({ protectedFiles: '[src/loans.js, docs/**' }))).toEqual([
+      ['field', 'protectedFiles', 3, '"protectedFiles" an inline list is never closed; keep it on one line'],
+    ]);
+    expect(await problems(goodBrief({ protectedFiles: '&p [src/loans.js]' }))).toEqual([
+      ['field', 'protectedFiles', 3, '"protectedFiles" anchors, aliases and tags are not supported'],
+    ]);
+    expect(await problems(goodBrief({ affectedFiles: '[/src/a.ts]' }))).toEqual([
+      ['glob', 'affectedFiles', 3, '"/src/a.ts" in affectedFiles: a pattern is relative to the repository root and cannot start with "/"'],
+    ]);
+    expect(await problems(goodBrief({ wave: 'two' }))).toEqual([['field', 'wave', 3, '"wave" must be a whole number, not "two"']]);
+  });
+
+  it('names no field for a block or a text none of which was read', async () => {
+    expect(await problems('---\nstatus: active\nprotectedFiles: [src/a.ts]\n\n# A\n')).toEqual([
+      ['front-matter', null, 1, 'the front matter opened on line 1 is never closed'],
+    ]);
+    expect(await problems(goodBrief().replace('---\nstatus: active\n---', "+++\nstatus = 'active'\n+++"))).toEqual([
+      ['front-matter', null, 1, 'TOML front matter is not read; write YAML between "---" lines'],
+    ]);
+    expect(await problems(goodBrief().replaceAll('\n', '\r'))).toEqual([
+      ['encoding', null, 1, 'ends its lines with a carriage return (CR) alone, which spec-brief does not read as a line break, so the brief was read as one line'],
+    ]);
+  });
+
+  it('names a duplicate key by the field as spelt, and a line that is no key by none', async () => {
+    const text = goodBrief({ 'protected-files': '[a]', protectedFiles: '[b]', owner: 'x', Owner: 'y' }).replace('---\n\n', 'not a line\n---\n\n');
+    expect(await problems(text, config({ fields: ['owner'] }))).toEqual([
+      ['front-matter', 'protectedFiles', 4, '"protectedFiles" is declared twice (first on line 3)'],
+      ['front-matter', 'owner', 6, '"Owner" is declared twice (first on line 5)'],
+      ['front-matter', null, 7, 'not a "key: value" line'],
+    ]);
+    // A key nobody declared is named as written.
+    expect(await problems(goodBrief({ extra: 'x', Extra: 'y' }))).toEqual([['front-matter', 'Extra', 4, '"Extra" is declared twice (first on line 3)']]);
+  });
+
+  it('counts a lone CR in the front matter, where it hides a field, and not one in the body', async () => {
+    const hidden = goodBrief({ affectedFiles: '[a]', protectedFiles: '[b]' }).replace('affectedFiles: [a]\n', 'affectedFiles: [a]\r');
+    expect(await problems(hidden)).toEqual([
+      ['encoding', null, 3, 'holds a carriage return (CR) with no line feed after it, which spec-brief reads as a space, not a line break'],
+      ['field', 'affectedFiles', 3, '"affectedFiles" text follows the end of an inline list'],
+    ]);
+    expect(await problems(`\r${goodBrief()}`)).toEqual([
+      ['encoding', null, 1, 'holds a carriage return (CR) with no line feed after it, which spec-brief reads as a space, not a line break'],
+    ]);
+    expect(await problems(goodBrief().replace('The tree is better.', 'The tree\ris better.'))).toEqual([]);
+  });
+
+  it('names a duplicate of the configured status field by its spelling, and with none configured never asks for one', async () => {
+    const state = config({ status: { field: 'state' } });
+    expect(await problems('---\nstate: active\nState: done\n---\n\n# A\n', state)).toEqual([['front-matter', 'state', 3, '"State" is declared twice (first on line 2)']]);
+    const none = config({ status: { field: null } });
+    expect(await problems('---\nextra: x\nExtra: y\n---\n\n# A\n', none)).toEqual([['front-matter', 'Extra', 3, '"Extra" is declared twice (first on line 2)']]);
+  });
+
+  it('reads a lone CR as in the block wherever the block runs: to a close never written, and on the closing line', async () => {
+    const lone = 'holds a carriage return (CR) with no line feed after it, which spec-brief reads as a space, not a line break';
+    expect(await problems('---\nstatus: active\nwave: 1\rprotectedFiles: [a]\n# A\n')).toEqual([
+      ['encoding', null, 3, lone],
+      ['front-matter', null, 1, 'the front matter opened on line 1 is never closed'],
+    ]);
+    expect(await problems('---\nstatus: active\n---\r\r\n\n# A\n')).toEqual([['encoding', null, 3, lone]]);
+    // With no block, a CR below the first line hides no field.
+    expect(await problems('# A\n\nsome\rtext\n')).toEqual([]);
+  });
+
+  it('is asked of the rules whatever the configuration sets them to', async () => {
+    const off = config({ rules: { encoding: 'off', 'front-matter': 'off', field: 'off', glob: 'off' } });
+    expect(await problems(goodBrief({ protectedFiles: '[a' }), off)).toEqual([
+      ['field', 'protectedFiles', 3, '"protectedFiles" an inline list is never closed; keep it on one line'],
+    ]);
+  });
+
+  it('holds an archived brief to its reading, not to the patterns it froze', async () => {
+    const archived = goodBrief({ status: 'archived', protectedFiles: '[/a]' });
+    expect(await problems(archived, config(), 'briefs/archive/001_a.md')).toEqual([]);
+    expect(await problems(archived.replace('protectedFiles: [/a]', 'protectedFiles: [/a'), config(), 'briefs/archive/001_a.md')).toEqual([
+      ['field', 'protectedFiles', 3, '"protectedFiles" an inline list is never closed; keep it on one line'],
+    ]);
   });
 });
 

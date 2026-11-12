@@ -39,6 +39,19 @@ Live briefs with their status, in the word the brief writes (`封存` where the 
 | `--archived` | The archive as well. |
 | `--format json` | The whole table, for an orchestrator, the sections the configuration asks for, each with its `hint`, and what the answer was read from. |
 
+**What kept a brief from being read whole.** A field whose value cannot be read is read as empty, so `"protectedFiles": []` says the same of a brief that protects nothing and of one whose protection could not be read. `--format json` gives each brief `problems`, empty for a brief read whole, so a tool that guards writes by the brief can tell the two apart; the pretty table names such briefs beneath it.
+
+```json
+"problems": [
+  { "rule": "field", "field": "protectedFiles", "line": 5, "message": "\"protectedFiles\" an inline list is never closed; keep it on one line" }
+]
+```
+
+- **`rule`** is the [rule](rules.md) whose finding it is, worded as `lint` words it, so `spec-brief lint` names the fix: `encoding` (UTF-16, lines ended by a carriage return alone, or a lone CR in the front matter), `front-matter` (a block never closed, TOML, a line that is no key, a duplicate key), `field` (a value of a field spec-brief reads that it cannot read: an inline list never closed, a YAML anchor, an empty item) or `glob` (a scope pattern it cannot read, such as one that starts with `/`).
+- **`field`** is the front-matter key it is about, spelt as spec-brief or the configuration spells it, or `null` where it is about the text or the block as a whole: then no field can be taken as read.
+- **`line`** is 1-based.
+- The rules are asked whatever the configuration sets them to: one turned `off` says nothing in `lint` and still reports here. Nothing else in the row changes meaning: an unreadable list is still `[]`, an unreadable status `null`, and `ready` is what it was.
+
 **What the answer was read from.** `--format json` names, under `inputs`, every input of its answer, so that a tool that asks for the same answer again, as spec-harness does before each write it checks, can give the one it kept while every input reads as listed, without starting spec-brief ([the family contract](https://github.com/spec-family/spec-core/blob/main/docs/adr/0005-the-family-contract.md), amended 2026-10-19):
 
 ```json

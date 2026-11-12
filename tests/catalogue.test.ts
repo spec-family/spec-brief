@@ -30,6 +30,7 @@ describe('the rule catalogue', () => {
 
   it('gives each rule the default severity the rules page documents', () => {
     expect(Object.fromEntries([...RULES, ...COLLISION_RULES, ...ARCHIVE_RULES].map((r) => [r.id, r.severity]))).toEqual({
+      encoding: 'error',
       'front-matter': 'error',
       field: 'error',
       'unknown-field': 'warning',
