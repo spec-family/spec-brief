@@ -5,6 +5,7 @@ What `lint`, `matrix`, `schedule` and `archive` report, by rule, with the severi
 <!-- rules:start -->
 | Rule | Default | Reports |
 | --- | --- | --- |
+| `encoding` | error | A brief that is not UTF-8 text with lines ended by LF or CRLF: UTF-16, which Windows PowerShell 5.1 writes with `>`, or lines ended by a carriage return alone. Nothing of such a brief is read, and it gets this finding and no other, not one for every section and field it seemed to lack. A line holding a lone CR among LF lines is read with the CR as a space, which in the front matter joins two fields into one: a warning, at the first such line. |
 | `front-matter` | error | Front matter that does not parse, a duplicate key, YAML beyond the flat subset, TOML. |
 | `field` | error | A field spec-brief reads with a value of the wrong shape: a wave that is not a whole number, a list where one value belongs. |
 | `unknown-field` | warning | A front-matter key nobody declared, with the one probably meant. |

@@ -288,6 +288,21 @@ describe('lists, matrices and plans', () => {
     expect(prettyList([{ brief: none.briefs[0]!, ready: false, waitingOn: [] }], plainStyle).split('\n')[1]).toContain('?     ');
   });
 
+  it('names beneath the table the briefs that were not read whole, in colour where colour is on', () => {
+    const listed = corpusOf({ 'briefs/001_a.md': goodBrief(), 'briefs/002_b.md': goodBrief() });
+    const problem = { rule: 'field', field: 'protectedFiles', line: 3, message: 'm' };
+    const rows = listed.briefs.map((brief, i) => ({ brief, ready: true, waitingOn: [], problems: i === 1 ? [problem] : [] }));
+    const esc = String.fromCharCode(27);
+    expect(prettyList(rows, { color: true }).split('\n').slice(3)).toEqual([
+      '',
+      `${esc}[33mnot read whole: briefs/002_b.md${esc}[39m`,
+      `${esc}[2mspec-brief lint names what to fix${esc}[22m`,
+    ]);
+    // Rows that carry no problems, or none at all, add nothing.
+    expect(prettyList(rows.slice(0, 1), plainStyle).split('\n')).toHaveLength(2);
+    expect(prettyList([{ brief: listed.briefs[0]!, ready: true, waitingOn: [] }], plainStyle).split('\n')).toHaveLength(2);
+  });
+
   it('shows the status word the brief writes, where the configuration spells it in Chinese', () => {
     const cfg = config({ status: { draft: '草稿', active: '進行中', deferred: '延後', archived: '封存' } });
     const listed = corpusOf(

@@ -1367,6 +1367,39 @@ describe('list and matrix', () => {
     }
   });
 
+  it('says which briefs were not read whole, so an empty protectedFiles is never mistaken for none', async () => {
+    const root = plain('cli-list-problems', {
+      'briefs/001_a.md': goodBrief({ protectedFiles: '[src/loans.js, docs/**' }),
+      'briefs/002_b.md': goodBrief({ protectedFiles: '[src/loans.js]' }),
+      'briefs/003_c.md': goodBrief().replaceAll('\n', '\r'),
+    });
+    const listed = await run(root, ['list', '--format', 'json']);
+    expect(listed.code).toBe(EXIT_OK);
+    const doc = JSON.parse(listed.out) as { briefs: { id: string; protectedFiles: string[]; ready: boolean; problems: unknown[] }[] };
+    expect(doc.briefs.map((b) => [b.id, b.protectedFiles, b.ready, b.problems])).toEqual([
+      ['001', [], true, [{ rule: 'field', field: 'protectedFiles', line: 3, message: '"protectedFiles" an inline list is never closed; keep it on one line' }]],
+      ['002', ['src/loans.js'], true, []],
+      [
+        '003',
+        [],
+        true,
+        [
+          {
+            rule: 'encoding',
+            field: null,
+            line: 1,
+            message: 'ends its lines with a carriage return (CR) alone, which spec-brief does not read as a line break, so the brief was read as one line',
+          },
+        ],
+      ],
+    ]);
+    const pretty = await run(root, ['list', '--no-color']);
+    expect(pretty.code).toBe(EXIT_OK);
+    expect(pretty.out.split('\n').slice(-4)).toEqual(['', 'not read whole: briefs/001_a.md, briefs/003_c.md', 'spec-brief lint names what to fix', '']);
+    // A table every brief of which was read says nothing beneath it.
+    expect((await run(plain('cli-list-whole', { 'briefs/001_a.md': goodBrief() }), ['list', '--no-color'])).out).not.toContain('not read whole');
+  });
+
   it('draws the matrix, exits 1 on a collision, and reports it in every format', async () => {
     const root = plain('cli-matrix', files);
     const pretty = await run(root, ['matrix', '--no-color']);

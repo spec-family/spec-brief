@@ -196,7 +196,7 @@ describe('the documents', () => {
 
   it('every configuration the documents show loads', () => {
     // A JSON block that parses whole is a configuration, and one that does
-    // not is the excerpt of list's JSON, which names its key.
+    // not is an excerpt of list's JSON, which names its key.
     const shown: string[] = [];
     for (const document of ['README.md', ...pages]) {
       for (const block of readFileSync(document, 'utf8').matchAll(/^```json\n([\s\S]*?)^```$/gm)) {
@@ -205,7 +205,7 @@ describe('the documents', () => {
         try {
           raw = JSON.parse(text);
         } catch {
-          expect(text.startsWith('"inputs": {'), `${document}: ${text}`).toBe(true);
+          expect(text.startsWith('"inputs": {') || text.startsWith('"problems": ['), `${document}: ${text}`).toBe(true);
           continue;
         }
         expect(() => resolveConfig(raw, document), `${document}: ${text}`).not.toThrow();
