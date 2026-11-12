@@ -19,7 +19,7 @@ import { dirOf, linesLinkingTo, normalisePath, rewriteLinks } from './links.js';
 import { configuredSeverity } from './lint.js';
 import type { Scan } from './markdown.js';
 import { claimLabel, lookUp } from './references.js';
-import { scopeChanges, scopeOf } from './scope.js';
+import { type ScopeChange, scopeChanges, scopeOf } from './scope.js';
 import { encodeLike, fillTemplate, inWords, joinLines, labelMatches, templateHoles } from './text.js';
 import type { Finding, Severity } from './types.js';
 
@@ -159,34 +159,48 @@ function outOfScopeFinding(brief: Brief, paths: readonly string[], strict: boole
  * scope. A brief the revision does not have was written by the round, and a
  * person reviews it whole.
  */
+/**
+ * What a scope change says, measured from the revision `at`; `before` is
+ * the brief's `affectedFiles` there, which a scope that bounds nothing any
+ * more names.
+ */
+export function scopeChangeMessage(change: ScopeChange, at: string, before: readonly string[]): string {
+  const { field, pattern, undecided } = change;
+  if (field === 'protectedFiles') {
+    return undecided
+      ? `whether protectedFiles still covers "${pattern}", as it did at ${at}, is undecided: the search met its budget`
+      : `protectedFiles no longer covers "${pattern}", as it did at ${at}`;
+  }
+  if (pattern === '**') {
+    return `affectedFiles no longer bounds the round: it names no pattern that can be read, and named ${inWords(before.map((p) => `"${p}"`))} at ${at}`;
+  }
+  return undecided
+    ? `whether affectedFiles covered "${pattern}" at ${at} is undecided: the search met its budget`
+    : `affectedFiles covers "${pattern}", which it did not at ${at}`;
+}
+
+/** The files the round changed that `own` matches, every one where it is `null`, and none of `unless` does. */
+function letThrough(work: readonly FileChange[], own: Glob | null, unless: readonly Glob[]): string[] {
+  return work.filter((c) => (own === null || matchGlob(own, c.path)) && !unless.some((g) => matchGlob(g, c.path))).map((c) => c.path);
+}
+
 function scopeChangedFindings(corpus: Corpus, brief: Brief, request: ArchiveRequest, work: readonly FileChange[], severity: Severity): Finding[] {
   const before = request.before;
   if (before === undefined || before.text === null) return [];
-  const old = parseBrief(brief.file, before.text, corpus.config, 'live');
+  const old = parseBrief(brief.file, before.text, corpus.config, brief.phase);
   const reading = readingIn(request.repoFiles ?? null);
   // A commit by its short hash, and its parent by the short hash and a caret.
-  const at = before.revision.replace(/^([0-9a-f]{7})[0-9a-f]+/, '$1');
+  const at = before.revision.endsWith('^') ? `${before.revision.slice(0, 7)}^` : before.revision.slice(0, 7);
   const kept = globs(brief.protectedFiles);
   const bound = globs(old.affectedFiles);
-  const changed = (patterns: readonly Glob[], unless: readonly Glob[]): string[] =>
-    work.filter((c) => patterns.some((g) => matchGlob(g, c.path)) && !unless.some((g) => matchGlob(g, c.path))).map((c) => c.path);
-  return scopeChanges(scopeOf(old, reading), scopeOf(brief, reading)).map(({ field, pattern, undecided }) => {
-    let paths: string[];
-    let message: string;
-    if (field === 'protectedFiles') {
-      paths = changed(globs([pattern]), kept);
-      message = undecided
-        ? `whether protectedFiles still covers "${pattern}", as it did at ${at}, is undecided: the search met its budget`
-        : `protectedFiles no longer covers "${pattern}", as it did at ${at}`;
-    } else if (pattern === '**') {
-      paths = work.filter((c) => !bound.some((g) => matchGlob(g, c.path)) && !kept.some((g) => matchGlob(g, c.path))).map((c) => c.path);
-      message = `affectedFiles no longer bounds the round: it names no pattern that can be read, and named ${inWords(old.affectedFiles.map((p) => `"${p}"`))} at ${at}`;
-    } else {
-      paths = changed(globs([pattern]), [...bound, ...kept]);
-      message = undecided
-        ? `whether affectedFiles covered "${pattern}" at ${at} is undecided: the search met its budget`
-        : `affectedFiles covers "${pattern}", which it did not at ${at}`;
-    }
+  return scopeChanges(scopeOf(old, reading), scopeOf(brief, reading)).map((change) => {
+    const { field, pattern } = change;
+    // Every pattern a change names parses, as scopeChanges read it.
+    const own = pattern === '**' ? null : globs([pattern])[0]!;
+    // A protection dropped lets through what the brief still protects
+    // nowhere; a scope widened, what it did not cover and does not protect.
+    const paths = letThrough(work, own, field === 'protectedFiles' ? kept : [...bound, ...kept]);
+    const message = scopeChangeMessage(change, at, old.affectedFiles);
     return {
       ...problem(
         brief,
@@ -605,8 +619,9 @@ export function planArchive(corpus: Corpus, brief: Brief, request: ArchiveReques
   const changedSeverity = configuredSeverity(corpus, 'scope-changed');
   const scopeChanged = changedSeverity === null ? [] : scopeChangedFindings(corpus, brief, request, work, changedSeverity);
   // A file the brief protected when the round started, and no longer does, is
-  // reported once, with the protection the round dropped.
-  const unguarded = new Set(scopeChanged.filter((f) => f.subject!.startsWith('protectedFiles')).flatMap((f) => f.paths!));
+  // reported once, with the protection the round dropped. A widened scope's
+  // files are inside affectedFiles, or there is none to be outside of.
+  const unguarded = new Set(scopeChanged.flatMap((f) => f.paths!));
   // A protected file is reported once, as protected, and not again as out of scope.
   const unprotected = work.filter((c) => !protectedGlobs.some((g) => matchGlob(g, c.path)) && !unguarded.has(c.path));
   const outside = affectedGlobs.length === 0 ? [] : unprotected.filter((c) => !affectedGlobs.some((g) => matchGlob(g, c.path)));

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { applyWaivers, type Plan, planArchive, WAIVABLE } from '../src/archive.js';
+import { applyWaivers, type Plan, planArchive, scopeChangeMessage, WAIVABLE } from '../src/archive.js';
 import { findingJson } from '../src/report.js';
 import type { Finding } from '../src/types.js';
 import { config, corpusOf, goodBrief } from './helpers.js';
@@ -191,6 +191,33 @@ describe('a round that changed the scope it runs under', () => {
       ['protected-file', 'docs/adr/1.md'],
     ]);
     expect(p.warnings[0]?.path).toBe('**');
+  });
+
+  it('lists only the files the change let through: not one still protected, not one the scope covered when the round started', () => {
+    const narrowed = goodBrief({ affectedFiles: '[src/auth/**]', protectedFiles: '[src/db/schema.ts, docs/adr/**]' });
+    const from = goodBrief({ affectedFiles: '[src/auth/**]', protectedFiles: '[src/db/**, docs/adr/**]' });
+    const kept = plan(narrowed, { before: from, paths: ['src/db/schema.ts', 'src/db/x.ts', 'docs/adr/1.md'] });
+    expect(kept.warnings.map((f) => [f.rule, f.path, f.paths])).toEqual([['scope-changed', 'src/db/**', ['src/db/x.ts']]]);
+    expect(kept.blocking.map((f) => f.path)).toEqual(['src/db/schema.ts', 'docs/adr/1.md']);
+    const widened = goodBrief({ affectedFiles: '[src/**]', protectedFiles: '[src/db/schema.ts, docs/adr/**]' });
+    const wide = plan(widened, { paths: ['src/auth/a.ts', 'src/api/b.ts', 'src/db/schema.ts'] });
+    expect(wide.warnings.map((f) => [f.rule, f.path, f.paths])).toEqual([['scope-changed', 'src/**', ['src/api/b.ts']]]);
+    const twoBound = goodBrief({ affectedFiles: '[src/auth/**, src/api/**]', protectedFiles: '[docs/adr/**]' });
+    const unbounded = plan(goodBrief({ protectedFiles: '[docs/adr/**]' }), { before: twoBound, paths: ['src/auth/a.ts', 'src/api/b.ts', 'lib/x.ts'] });
+    expect(unbounded.warnings.map((f) => [f.rule, f.path, f.paths])).toEqual([['scope-changed', '**', ['lib/x.ts']]]);
+  });
+
+  it('reads a literal as the tree reads it, so a directory written with its slash is no change', () => {
+    const from = goodBrief({ affectedFiles: '[src/auth/**]', protectedFiles: '[src/db, docs/adr/**]' });
+    const now = goodBrief({ affectedFiles: '[src/auth/**]', protectedFiles: '[src/db/, docs/adr/**]' });
+    expect(plan(now, { before: from, paths: ['src/auth/a.ts'] }).warnings).toEqual([]);
+  });
+
+  it('says a pattern it could not decide is undecided, and names the brief as it started for a scope that bounds nothing', () => {
+    const change = (field: 'affectedFiles' | 'protectedFiles', pattern: string, undecided: boolean) => scopeChangeMessage({ field, pattern, undecided }, 'abc1234', ['src/a/**', 'src/b.ts']);
+    expect(change('protectedFiles', 'src/db/**', true)).toBe('whether protectedFiles still covers "src/db/**", as it did at abc1234, is undecided: the search met its budget');
+    expect(change('affectedFiles', 'src/x/**', true)).toBe('whether affectedFiles covered "src/x/**" at abc1234 is undecided: the search met its budget');
+    expect(change('affectedFiles', '**', false)).toBe('affectedFiles no longer bounds the round: it names no pattern that can be read, and named "src/a/**" and "src/b.ts" at abc1234');
   });
 
   it('names the line of the field, and a change without files as the change alone', () => {

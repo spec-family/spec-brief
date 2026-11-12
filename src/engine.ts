@@ -445,7 +445,9 @@ export class BriefEngine {
     const git = options.noGit === true ? null : this.git;
     const base = options.base ?? this.config.archiving.base ?? undefined;
     const documents = await this.documents();
-    const findings = await this.lintWith(documents);
+    // Read once, for the lint and for the literals of the scope compared.
+    const repoFiles = await this.repoFiles();
+    const findings = await lint(this.corpus, { plugins: await this.loadedPlugins(), repoFiles, documents });
 
     let commit: CommitInfo | undefined;
     let changes: FileChange[] | undefined;
@@ -505,7 +507,7 @@ export class BriefEngine {
       findings,
       documents,
       before,
-      repoFiles: before === undefined ? undefined : await this.repoFiles(),
+      repoFiles,
     });
     return this.waive(plan, base ?? null, commit?.sha ?? null, options.strict === true);
   }
