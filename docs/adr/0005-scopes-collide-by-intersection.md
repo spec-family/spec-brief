@@ -314,3 +314,33 @@ the reader to discount it.
 `--format json` is a document for a script and keeps both: every pair the
 comparison found under `waves`, `sharedDirectories` among them, and the run's
 `findings` beside them, which say which of those it reports.
+
+## Amended 2026-11-12: a pair proved apart is not searched
+
+Two briefs of a wave were compared by searching every pair of their
+patterns, each search over the product of the two patterns and every
+protection of both briefs. The work grew with the pairs times the
+protections: two briefs of 200 patterns, one protection to every four,
+took 17 seconds, and two of 50 names under `**/`, with no protection, more
+than two minutes, since proving no file ends in both `a3.ts` and `*.b7`
+walked the automata of every protection as well.
+
+Most pairs of a wave share no path, and the protections cannot make a pair
+share one. So a pair is first asked what each pattern fixes of every path it
+matches: the directories it lies under (spec-core's `bases`), and how its
+last name starts and ends, the text before the name's first piece of syntax
+and after its last. Two patterns under unrelated directories, or whose last
+names cannot start or end alike, share no path. A pattern whose written last
+name is not the path's, a literal read as a directory, a brace whose
+alternatives end in different directories, or an escape, fixes no name. A
+pair this does not settle is searched without the protections, and one that
+search proves apart is apart. Only the rest are searched as before, so
+every collision and every witness named is the one the search with the
+protections finds. A pair the search with the protections could not decide
+within its budget, and either test proves apart, is no longer reported as
+undecided.
+
+The test is checked against brute force over generated patterns
+(`tests/scope.test.ts`): it never calls a pair apart that a path of the
+enumeration matches both of. Two briefs of 3,000 patterns now compare in
+under a second.

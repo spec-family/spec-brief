@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { type Glob, matchGlob, parseGlob, readingIn } from '../src/glob.js';
-import { contradictions, meet, patternsOf, type Scope, scopeChanges, scopeOf } from '../src/scope.js';
+import { apart, contradictions, meet, patternsOf, type Scope, scopeChanges, scopeOf } from '../src/scope.js';
 import { brief, goodBrief } from './helpers.js';
 
 /**
@@ -152,7 +152,78 @@ describe('two scopes meeting', () => {
     }
     // The corpus reaches every answer, not only the easy one.
     expect(seen).toEqual({ met: 59, apart: 61, covered: 29 });
-    expect(read).toEqual({ held: 29, example: 30, settled: 29, undecided: 86 });
+    // Five pairs a search of one state cannot decide are proved apart by what their patterns fix.
+    expect(read).toEqual({ held: 29, example: 30, settled: 29, undecided: 81 });
+  });
+});
+
+describe('two patterns proved apart without a search', () => {
+  it('never says two patterns are apart when brute force finds a path both match', () => {
+    let seed = 20261112;
+    // The high bits: the low bits of this generator repeat within a few draws.
+    const random = (n: number): number => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return Math.floor(seed / 65536) % n;
+    };
+    const atoms = ['a', 'b', 'x', 'a', 'b', 'x', 'ab', '*', '?', '[ab]', '{a,bx}', '{x,}'];
+    const name = (): string => Array.from({ length: 1 + random(2) }, () => atoms[random(atoms.length)] as string).join('');
+    const segment = (): string => (random(10) === 0 ? '**' : name());
+    const tails = ['', '', '', '', '', '', '/', '/**'];
+    const pattern = (): string => {
+      const body = Array.from({ length: 1 + random(3) }, segment).join('/');
+      // A brace whose alternatives end in different directories, now and then.
+      return random(8) === 0 ? `{a/${body},b}` : `${body}${tails[random(tails.length)] as string}`;
+    };
+    const names = ['a', 'b', 'x', 'ab', 'ax', 'bx', 'xa', 'abx'];
+    const paths: string[] = [];
+    const build = (prefix: string[], depth: number): void => {
+      if (prefix.length > 0) paths.push(prefix.join('/'));
+      if (depth > 0) for (const n of names) build([...prefix, n], depth - 1);
+    };
+    build([], 3);
+    // Literals read as the tree has them: some as files, some as directories.
+    const reading = readingIn(paths.filter((_, i) => i % 5 === 1));
+    const seen = { apart: 0, unproved: 0, sharing: 0 };
+    for (let i = 0; i < 1500; i += 1) {
+      const [px, py] = [pattern(), pattern()];
+      const [x, y] = [parseGlob(px, { literal: reading }), parseGlob(py, { literal: reading })];
+      if (!x.ok || !y.ok) continue;
+      const shared = paths.find((p) => matchGlob(x.glob, p) && matchGlob(y.glob, p));
+      const proved = apart(x.glob, y.glob);
+      if (shared !== undefined) expect(proved, `${px} and ${py} both match ${shared}`).toBe(false);
+      seen.apart += proved ? 1 : 0;
+      seen.sharing += shared === undefined ? 0 : 1;
+      seen.unproved += !proved && shared === undefined ? 1 : 0;
+    }
+    // The corpus reaches every answer: pairs proved apart, pairs that share a path, and pairs left to the search.
+    expect(seen).toEqual({ apart: 462, unproved: 660, sharing: 265 });
+  });
+
+  it('proves apart by the directories a pattern lies under and by how its last name starts and ends, and by nothing else', () => {
+    const g = (source: string, literal: 'file' | 'directory' = 'file'): Glob => {
+      const parsed = parseGlob(source, { literal });
+      if (!parsed.ok) throw new Error(parsed.error);
+      return parsed.glob;
+    };
+    const proved = (x: string, y: string): boolean => apart(g(x), g(y));
+    expect(proved('src/a/**', 'src/b/**')).toBe(true);
+    expect(proved('src/a/**', 'src/**/x.ts')).toBe(false);
+    expect(proved('**/a.ts', '**/b.ts')).toBe(true);
+    expect(proved('**/*.a1', '**/*.b2')).toBe(true);
+    expect(proved('**/x*.ts', '**/y*.ts')).toBe(true);
+    expect(proved('**/x*.ts', '**/xy*.ts')).toBe(false);
+    expect(proved('**/*.ts', '**/a.ts')).toBe(false);
+    expect(proved('**/{a,b}.ts', '**/c.md')).toBe(true);
+    expect(proved('**/{a,b}.ts', '**/a.ts')).toBe(false);
+    // A last name left open: a directory, a brace across directories, a trailing slash, an escape.
+    expect(apart(g('src/a.ts', 'directory'), g('**/b.ts'))).toBe(false);
+    expect(proved('{a/x.ts,y}', '**/y')).toBe(false);
+    expect(proved('src/', '**/b.ts')).toBe(false);
+    expect(proved('src/**', '**/b.ts')).toBe(false);
+    expect(proved('src/a\\*.ts', '**/b.ts')).toBe(false);
+    // A pattern as written, spaces around it, is the pattern the parse read.
+    expect(proved(' **/a.ts ', '**/a.ts')).toBe(false);
+    expect(proved('**/x*y*.ts ', '**/xay.ts')).toBe(false);
   });
 });
 

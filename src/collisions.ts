@@ -222,15 +222,23 @@ export function collisionFindings(corpus: Corpus, report: CollisionReport): Find
   return findings;
 }
 
-/** A brief with no scope, which nothing can be proved apart from. */
+/**
+ * A brief with no scope, which nothing can be proved apart from. One that
+ * declares patterns none of which can be read, `src/../x` or `!x`, was told
+ * it declares none, and sent to write what it had written: it is told why
+ * they scope nothing, and pointed at the fix.
+ */
 export function unscopedFinding(severity: Severity, brief: Brief, others: string): Finding {
+  const written = brief.affectedFiles.length > 0;
   return {
     rule: 'unscoped',
     severity,
-    message: `declares no affectedFiles, so it cannot be checked against ${others}`,
+    message: written
+      ? `has no pattern in affectedFiles that can be read, ${inWords(brief.affectedFiles.map((p) => `"${p}"`))}, so it cannot be checked against ${others}`
+      : `declares no affectedFiles, so it cannot be checked against ${others}`,
     file: brief.file,
-    line: 1,
+    line: written ? lineOfField(brief, 'affectedFiles') + 1 : 1,
     brief: brief.id ?? undefined,
-    hint: 'list the files or globs this round writes under "affectedFiles"',
+    hint: written ? 'fix the patterns as spec-brief lint says under "glob"' : 'list the files or globs this round writes under "affectedFiles"',
   };
 }
