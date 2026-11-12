@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { type Corpus, dependencyCycles, findBriefs, idKey, isReady, pendingDependencies, resolveDependency, waitingOnDeferred } from '../src/corpus.js';
 import { collisionFindings, collisions } from '../src/collisions.js';
 import { config, corpusOf, goodBrief } from './helpers.js';
+import { fastestInTurn, instrumented } from './timing.js';
 
 // Every corpus is built inside its test: one built while the file loads is
 // code Stryker measures against the whole suite (ADR-0009).
@@ -193,6 +194,51 @@ describe('the collision matrix', () => {
     expect(report.unscheduled).toEqual([]);
     const pairs = report.waves[0]!.collisions.map((c) => `${c.a.id}-${c.b.id}`);
     expect(pairs).toEqual(['001-002', '001-005', '001-006', '002-005', '002-006', '005-006']);
+  });
+
+  it('compares two briefs of many patterns in time that grows with the pairs, not with the protections as well', async () => {
+    // Each pattern its own directory, and a protection for every fourth: no
+    // pair meets. Every pair was searched with every protection in it, so
+    // twice the patterns took over eight times as long; two briefs of 200
+    // took 17 seconds, and of 400 more than two minutes.
+    const wave = (count: number): Corpus =>
+      corpusOf(
+        Object.fromEntries(
+          [1, 2].map((b) => {
+            const affected = Array.from({ length: count }, (_, i) => `src/b${b}/m${i}/**`).join(', ');
+            const kept = Array.from({ length: count / 4 }, (_, i) => `src/b${b}/m${i}/keep.ts`).join(', ');
+            return [`briefs/00${b}_x.md`, goodBrief({ wave: '1', affectedFiles: `[${affected}]`, protectedFiles: `[${kept}]` })];
+          }),
+        ),
+      );
+    const [small, large] = [wave(100), wave(200)];
+    expect(collisionFindings(large, collisions(large))).toEqual([]);
+    // Names under "**/" fix no directory, and their last names tell them apart.
+    const named = corpusOf({
+      'briefs/001_x.md': goodBrief({ wave: '1', affectedFiles: `[${Array.from({ length: 60 }, (_, i) => `"**/a${i}.ts"`).join(', ')}]` }),
+      'briefs/002_x.md': goodBrief({ wave: '1', affectedFiles: `[${Array.from({ length: 60 }, (_, i) => `"**/*.b${i}"`).join(', ')}]` }),
+    });
+    expect(collisionFindings(named, collisions(named))).toEqual([]);
+    if (instrumented()) return;
+    // Doubled, the pairs are four times as many. Five times is allowed, and 100 ms for noise.
+    const [one, other] = (await fastestInTurn(3, () => collisions(small), () => collisions(large))) as [number, number];
+    expect(other).toBeLessThan(5 * one + 100);
+  });
+
+  it('tells a brief whose patterns cannot be read why it is unscoped, and does not tell it it declares none', () => {
+    const corpus = corpusOf({
+      'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[src/a.ts]' }),
+      'briefs/002_b.md': goodBrief({ wave: '1', affectedFiles: '[src/../src/loans.js, "!src/loans.js"]' }),
+    });
+    const found = collisionFindings(corpus, collisions(corpus));
+    expect(found.map((f) => [f.rule, f.line, f.message, f.hint])).toEqual([
+      [
+        'unscoped',
+        4,
+        'has no pattern in affectedFiles that can be read, "src/../src/loans.js" and "!src/loans.js", so it cannot be checked against the 1 other brief(s) in wave 1',
+        'fix the patterns as spec-brief lint says under "glob"',
+      ],
+    ]);
   });
 
   it('reports collisions as errors, unscoped briefs as notes, and shared directories only when switched on', () => {

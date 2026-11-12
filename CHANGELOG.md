@@ -56,6 +56,25 @@ what a run reports.
   line holding one. With the rule `off`, the other rules speak as before.
   27 lint rules and 5 collision rules.
 
+### Fixed
+
+- **`matrix` and `schedule` take time that grows with the pairs of
+  patterns, not with the protections as well.** Two briefs of 200 patterns
+  in one wave took 17 seconds, and two of 50 names under `**/` more than
+  two minutes; two of 3,000 now take under a second. A pair of patterns
+  proved to share no path, by the directories each lies under, by how their
+  last names start and end, or by a search of the two alone, is not
+  searched with every protection of both briefs. Every collision and
+  witness reported is as before; a pair the full search could not decide
+  and that is proved apart is no longer reported as undecided
+  ([ADR-0005](https://github.com/spec-family/spec-brief/blob/main/docs/adr/0005-scopes-collide-by-intersection.md), amended
+  2026-11-12).
+- **`unscoped` says why a brief whose patterns cannot be read is
+  unscoped.** `affectedFiles: [src/../src/loans.js, "!src/loans.js"]` was
+  told it declares no `affectedFiles`; it is told none of its patterns can
+  be read, names them, and is pointed at `lint`'s `glob` findings, on the
+  line of the field.
+
 ## 0.14.0
 
 `--format github` annotates a note only under `--verbose`, which is new,

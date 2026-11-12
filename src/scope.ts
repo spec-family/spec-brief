@@ -11,7 +11,7 @@
  */
 
 import type { Brief } from './brief.js';
-import { filesMatching, type Glob, globCovers, globWitness, type LiteralReading, matchGlob, parseGlob, WITNESS_BUDGET } from './glob.js';
+import { filesMatching, type Glob, globBases, globCovers, globWitness, type LiteralReading, matchGlob, parseGlob, WITNESS_BUDGET } from './glob.js';
 
 /** How a literal path is read, as {@link readingIn} answers for a tree. */
 export type Reading = (path: string) => LiteralReading;
@@ -114,6 +114,16 @@ export function meet(a: Scope, b: Scope, budget: number = WITNESS_BUDGET, files:
   const undecided: (readonly [string, string])[] = [];
   for (const x of a.affected) {
     for (const y of b.affected) {
+      // Two patterns that share no path share none outside the protections.
+      // Most pairs of a wave share none, and the search over every protection
+      // grew with the protections as well as the pairs: two briefs of 200
+      // patterns took 17 seconds, and of 50 names under "**/", over two
+      // minutes. Asked first by what each pattern fixes, then of the two
+      // alone, a pair proved apart costs that; the search with the
+      // protections, whose witness is the one named, runs only for the rest.
+      // Without the search of the two alone the answers are those of the
+      // search with the protections, which takes longer to give them.
+      if (apart(x.glob, y.glob) || globWitness([x.glob, y.glob], [], budget).kind === 'none') continue;
       const witness = globWitness([x.glob, y.glob], avoid, budget);
       if (witness.kind === 'none') continue;
       const patterns: readonly [string, string] = [x.pattern, y.pattern];
@@ -124,6 +134,95 @@ export function meet(a: Scope, b: Scope, budget: number = WITNESS_BUDGET, files:
     }
   }
   return { overlaps, undecided };
+}
+
+/** What every last name a pattern matches starts and ends with: the whole name, for a name written out. */
+interface Ends {
+  readonly prefix: string;
+  readonly suffix: string;
+}
+
+/** What a pattern fixes of every path it matches: the directories it lies under, and how its last name starts and ends. */
+interface Fixed {
+  readonly bases: readonly string[];
+  readonly name: Ends | null;
+}
+
+const fixedOf = new WeakMap<Glob, Fixed>();
+
+/** A character of a name's syntax, where its written text stops being the name's. */
+const NAME_SYNTAX = /[*?[\]{}!]/;
+
+/**
+ * How the last name of every path a pattern matches starts and ends: the
+ * text before the name's first piece of syntax, and after its last; the name
+ * itself where it has none. A pattern that ends in `/` or `**` lets the
+ * path go on, and its name starts and ends with nothing, which any name does.
+ * `null` where the text is not the last name's: a literal that may be read
+ * as a directory, a brace whose alternatives end in different directories,
+ * an escape. A `*` never matches a `/`, so a name's text is the text of the
+ * path's last name.
+ */
+function lastName(glob: Glob): Ends | null {
+  const source = glob.source.trim();
+  if (source.includes('\\') || glob.literals.some((literal) => literal.reading !== 'file')) return null;
+  let depth = 0;
+  let slash = -1;
+  for (let i = 0; i < source.length; i += 1) {
+    const ch = source[i];
+    if (ch === '{') depth += 1;
+    else if (ch === '}') depth -= 1;
+    else if (ch === '/') {
+      // A slash inside braces after the last one outside them: the
+      // alternatives do not share a last name.
+      if (depth > 0) return null;
+      slash = i;
+    }
+  }
+  const name = source.slice(slash + 1);
+  const first = name.search(NAME_SYNTAX);
+  if (first === -1) return { prefix: name, suffix: name };
+  let last = name.length - 1;
+  while (!NAME_SYNTAX.test(name[last]!)) last -= 1;
+  return { prefix: name.slice(0, first), suffix: name.slice(last + 1) };
+}
+
+/** Whether some name can start and end as both say. */
+function meetable(a: Ends, b: Ends): boolean {
+  const starts = a.prefix.startsWith(b.prefix) || b.prefix.startsWith(a.prefix);
+  return starts && (a.suffix.endsWith(b.suffix) || b.suffix.endsWith(a.suffix));
+}
+
+/**
+ * Found once per pattern, which every pair it is in shares; kept or not, the
+ * answer is the same, and only the time differs, so a mutant that does not
+ * keep it is equivalent.
+ */
+function fixed(glob: Glob): Fixed {
+  let found = fixedOf.get(glob);
+  if (found === undefined) {
+    found = { bases: globBases(glob), name: lastName(glob) };
+    fixedOf.set(glob, found);
+  }
+  return found;
+}
+
+/** Whether one directory is the other or lies beneath it; the root holds every one. */
+function nested(p: string, q: string): boolean {
+  return p === '' || q === '' || p === q || q.startsWith(`${p}/`) || p.startsWith(`${q}/`);
+}
+
+/**
+ * Whether two patterns are proved to share no path by what each fixes: every
+ * path of one lies under a directory no path of the other can be under, or
+ * no last name can start and end as both require. `false` says nothing; the
+ * search decides.
+ */
+export function apart(x: Glob, y: Glob): boolean {
+  const fx = fixed(x);
+  const fy = fixed(y);
+  if (!fx.bases.some((p) => fy.bases.some((q) => nested(p, q)))) return true;
+  return fx.name !== null && fy.name !== null && !meetable(fx.name, fy.name);
 }
 
 /**
