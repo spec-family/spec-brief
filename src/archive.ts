@@ -179,9 +179,9 @@ export function scopeChangeMessage(change: ScopeChange, at: string, before: read
     : `affectedFiles covers "${pattern}", which it did not at ${at}`;
 }
 
-/** The files the round changed that `own` matches, every one where it is `null`, and none of `unless` does. */
-function letThrough(work: readonly FileChange[], own: Glob | null, unless: readonly Glob[]): string[] {
-  return work.filter((c) => (own === null || matchGlob(own, c.path)) && !unless.some((g) => matchGlob(g, c.path))).map((c) => c.path);
+/** The files the round changed that `own` matches and none of `unless` does. */
+function letThrough(work: readonly FileChange[], own: Glob, unless: readonly Glob[]): string[] {
+  return work.filter((c) => matchGlob(own, c.path) && !unless.some((g) => matchGlob(g, c.path))).map((c) => c.path);
 }
 
 function scopeChangedFindings(corpus: Corpus, brief: Brief, request: ArchiveRequest, work: readonly FileChange[], severity: Severity): Finding[] {
@@ -195,8 +195,9 @@ function scopeChangedFindings(corpus: Corpus, brief: Brief, request: ArchiveRequ
   const bound = globs(old.affectedFiles);
   return scopeChanges(scopeOf(old, reading), scopeOf(brief, reading)).map((change) => {
     const { field, pattern } = change;
-    // Every pattern a change names parses, as scopeChanges read it.
-    const own = pattern === '**' ? null : globs([pattern])[0]!;
+    // Every pattern a change names parses, as scopeChanges read it, and the
+    // "**" of a scope that bounds nothing matches every file.
+    const own = globs([pattern])[0]!;
     // A protection dropped lets through what the brief still protects
     // nowhere; a scope widened, what it did not cover and does not protect.
     const paths = letThrough(work, own, field === 'protectedFiles' ? kept : [...bound, ...kept]);

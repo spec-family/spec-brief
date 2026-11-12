@@ -199,6 +199,9 @@ describe('a round that changed the scope it runs under', () => {
     const kept = plan(narrowed, { before: from, paths: ['src/db/schema.ts', 'src/db/x.ts', 'docs/adr/1.md'] });
     expect(kept.warnings.map((f) => [f.rule, f.path, f.paths])).toEqual([['scope-changed', 'src/db/**', ['src/db/x.ts']]]);
     expect(kept.blocking.map((f) => f.path)).toEqual(['src/db/schema.ts', 'docs/adr/1.md']);
+    // A protection inside the scope the round started with still let the file through: protection wins over scope.
+    const inside = plan(goodBrief({ affectedFiles: '[src/**]' }), { before: goodBrief({ affectedFiles: '[src/**]', protectedFiles: '[src/db/schema.ts]' }), paths: ['src/db/schema.ts'] });
+    expect(inside.warnings.map((f) => [f.rule, f.path, f.paths])).toEqual([['scope-changed', 'src/db/schema.ts', ['src/db/schema.ts']]]);
     const widened = goodBrief({ affectedFiles: '[src/**]', protectedFiles: '[src/db/schema.ts, docs/adr/**]' });
     const wide = plan(widened, { paths: ['src/auth/a.ts', 'src/api/b.ts', 'src/db/schema.ts'] });
     expect(wide.warnings.map((f) => [f.rule, f.path, f.paths])).toEqual([['scope-changed', 'src/**', ['src/api/b.ts']]]);
