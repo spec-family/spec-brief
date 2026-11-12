@@ -134,6 +134,45 @@ export function witnessText(overlap: Overlap): string {
   return overlap.inTree === false ? `${overlap.witness}, an example not in the tree` : overlap.witness;
 }
 
+/** A way a brief's scope grew between two readings of it. */
+export interface ScopeChange {
+  readonly field: 'affectedFiles' | 'protectedFiles';
+  /**
+   * The pattern `affectedFiles` gained, or `protectedFiles` lost, as written;
+   * `**` where `affectedFiles` names no pattern any more and so bounds nothing.
+   */
+  readonly pattern: string;
+  /** The search met its budget before it could say whether the pattern is covered. */
+  readonly undecided: boolean;
+}
+
+/**
+ * How a brief's writable scope grew from `before` to `after`: each pattern
+ * of `before`'s protections that `after`'s no longer cover entirely, and each
+ * of `after`'s affected patterns that `before`'s did not cover entirely. A
+ * pattern rewritten to one that says the same, or reordered, is no change,
+ * and narrowing the scope is none either. An affected list that empties is
+ * a scope that bounds nothing, where it bounded something; one that was empty
+ * bounded nothing already, and cannot grow. A pattern that does not parse
+ * scopes nothing, on either side.
+ */
+export function scopeChanges(before: Scope, after: Scope, budget: number = WITNESS_BUDGET): ScopeChange[] {
+  const changes: ScopeChange[] = [];
+  const kept = after.protected.map((p) => p.glob);
+  for (const { pattern, glob } of before.protected) {
+    const answer = globCovers(kept, glob, budget);
+    if (answer !== true) changes.push({ field: 'protectedFiles', pattern, undecided: answer === 'undecided' });
+  }
+  if (before.affected.length === 0) return changes;
+  if (after.affected.length === 0) return [...changes, { field: 'affectedFiles', pattern: '**', undecided: false }];
+  const bound = before.affected.map((p) => p.glob);
+  for (const { pattern, glob } of after.affected) {
+    const answer = globCovers(bound, glob, budget);
+    if (answer !== true) changes.push({ field: 'affectedFiles', pattern, undecided: answer === 'undecided' });
+  }
+  return changes;
+}
+
 export interface Contradiction {
   /** Affected patterns every file of which is protected: nothing of them is writable. */
   readonly covered: readonly string[];

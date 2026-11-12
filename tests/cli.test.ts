@@ -6,7 +6,7 @@ import { join, relative } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { EXIT_ERROR, EXIT_FAILED, EXIT_OK, HELP, main, onVolume, parse, UsageError } from '../src/cli.js';
-import { commitAll, goodBrief, head, initRepo, pipe, Sink, tempDir, writeTree } from './helpers.js';
+import { commitAll, git, goodBrief, head, initRepo, pipe, Sink, tempDir, writeTree } from './helpers.js';
 
 const made: string[] = [];
 function dir(name: string): string {
@@ -1708,6 +1708,37 @@ describe('archive and unarchive', () => {
     expect(both).toContain('out-of-scope');
   });
 
+  it('warns of a round that loosened its own brief, from the merge base, and refuses it under --strict', async () => {
+    // The configuration in a directory below the top of the work tree: the
+    // brief at the merge base is read from there, as every path is.
+    const started = goodBrief({ affectedFiles: '[src/auth/**]', protectedFiles: '[src/db/schema.ts]' });
+    const root = dir('cli-archive-scope-changed');
+    initRepo(root);
+    writeTree(root, { 'app/.spec-brief.json': '{}', 'app/briefs/001_a.md': started, 'app/src/db/schema.ts': 'x\n', 'app/src/auth/a.ts': 'x\n' });
+    commitAll(root, 'the brief, approved');
+    git(root, 'checkout', '-q', '-b', 'round');
+    writeTree(root, { 'app/briefs/001_a.md': goodBrief({ affectedFiles: '[src/auth/**]', protectedFiles: '[]' }, '\n- [x] ticked\n'), 'app/src/db/schema.ts': 'y\n' });
+    commitAll(root, 'the round');
+    const lenient = await run(root, ['--root', join(root, 'app'), 'archive', '1', '--dry-run', '--base', 'main', '--format', 'json']);
+    expect(lenient.err).toBe('');
+    expect(lenient.code).toBe(EXIT_OK);
+    const plan = (JSON.parse(lenient.out) as { plan: { blocking: unknown[]; warnings: Record<string, unknown>[] } }).plan;
+    expect(plan.blocking).toEqual([]);
+    expect(plan.warnings.map((f) => [f['rule'], f['severity'], f['path'], f['paths']])).toEqual([['scope-changed', 'warning', 'src/db/schema.ts', ['src/db/schema.ts']]]);
+    expect(plan.warnings[0]?.['message']).toMatch(/^protectedFiles no longer covers "src\/db\/schema\.ts", as it did at [0-9a-f]{7}, and the round changed src\/db\/schema\.ts$/);
+    const strict = await run(root, ['--root', join(root, 'app'), 'archive', '1', '--dry-run', '--base', 'main', '--strict', '--no-color']);
+    expect(strict.code).toBe(EXIT_FAILED);
+    expect(strict.out).toContain('scope-changed');
+    // Put back as it was, the protection is no change, and the file is the protected file it always was.
+    writeTree(root, { 'app/briefs/001_a.md': `${started}\n- [x] ticked\n` });
+    commitAll(root, 'the brief put back');
+    const restored = await run(root, ['--root', join(root, 'app'), 'archive', '1', '--dry-run', '--base', 'main', '--format', 'json']);
+    expect(restored.code).toBe(EXIT_FAILED);
+    const back = (JSON.parse(restored.out) as { plan: { blocking: Record<string, unknown>[]; warnings: unknown[] } }).plan;
+    expect(back.blocking.map((f) => [f['rule'], f['path']])).toEqual([['protected-file', 'src/db/schema.ts']]);
+    expect(back.warnings).toEqual([]);
+  });
+
   it('refuses under --strict to reopen a brief whose links it would leave behind', async () => {
     const root = plain('cli-unarchive-strict', {
       '.spec-brief.json': JSON.stringify({ archiving: { rewriteLinks: false } }),
@@ -1719,6 +1750,7 @@ describe('archive and unarchive', () => {
     expect(strict.out).toContain('stale-link');
     expect(existsSync(join(root, 'briefs', 'archive', '001_a.md'))).toBe(true);
     const lenient = await run(root, ['unarchive', '1', '--no-color']);
+    expect(lenient.err).toBe('');
     expect(lenient.code).toBe(EXIT_OK);
     expect(lenient.out).toContain('briefs/002_b.md:19');
     expect(readFileSync(join(root, 'briefs', '002_b.md'), 'utf8')).toContain('[a](archive/001_a.md)');

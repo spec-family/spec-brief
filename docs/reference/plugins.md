@@ -39,7 +39,7 @@ A plugin may also export `waive`, which lets the archive accept a change its own
 export default () => ({
   name: 'rulings',
   rules: [],
-  // context: { root, brief: { id, file, text }, findings, base, commit }
+  // context: { root, brief: { id, file, text }, findings, warnings, base, commit }
   waive: async ({ findings }) =>
     findings
       .filter((f) => f.rule === 'protected-file' && verifiedRulingCovers(f.path))
@@ -47,8 +47,8 @@ export default () => ({
 });
 ```
 
-- `findings` are the archive's refusals, as a frozen copy: a hook reads them and cannot change them, and a write to them throws.
-- Two refusals can be waived, and no others: `protected-file`, one per file, which names its `path`; and `out-of-scope`, which refuses only under `--strict` and lists its `paths`.
-- A waiver matches one of the plan's own refusals by rule and path and turns it into a `waived` note naming the plugin, the rule, the path and the reason. A waiver for any other rule is ignored with a `waiver-ignored` warning.
-- The hook is asked only when the plan has a refusal it could lift.
+- `findings` are the archive's refusals, and `warnings` its `scope-changed` warnings, each as a frozen copy: a hook reads them and cannot change them, and a write to them throws.
+- Three can be waived, and no others: `protected-file`, one per file, which names its `path`; `out-of-scope`, which refuses only under `--strict` and lists its `paths`; and `scope-changed`, one per pattern the round dropped from `protectedFiles` or added to `affectedFiles`, which names the pattern as its `path`, lists the files the change let through as its `paths`, and is among the `warnings` unless `--strict` makes it a refusal.
+- A waiver matches one of the plan's own refusals by rule and path, or a `scope-changed` warning by its pattern, and turns it into a `waived` note naming the plugin, the rule, the path and the reason. A `scope-changed` finding is waived by its pattern alone, never by a file it let through. An `out-of-scope` warning is not waived. A waiver for any other rule is ignored with a `waiver-ignored` warning.
+- The hook is asked only when the plan has a refusal or a `scope-changed` warning it could lift.
 - A hook that returns nothing waives nothing. One that throws - a write to `findings` included - or answers in another shape stops the run with exit 2, as a plugin that fails to load does.

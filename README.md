@@ -115,7 +115,7 @@ Every privilege change issues a new session token and invalidates the old one.
 | Claims raised and rows awaited | `raises`, `awaits` |
 | Scopes | `glob`, `scope-contradiction`, `glob-matches-nothing`, `literal-read-as-file` |
 | Briefs side by side (`matrix`, `schedule`) | `collision`, `collision-undecided`, `unscoped`, `shared-directory`, `wave-schedule` |
-| Archived briefs and archival | `archive-freeze`, `scope-unmeasured`, `stale-link` |
+| Archived briefs and archival | `archive-freeze`, `scope-changed`, `scope-unmeasured`, `stale-link` |
 
 `archive` also refuses a round for reasons of its own, such as an open task, a live dependency, a claim still open, uncommitted work or a protected file changed. [Rules](docs/reference/rules.md) has what each rule reports and its default severity, and a [plugin](docs/reference/plugins.md) adds rules of its own.
 

@@ -15,6 +15,7 @@ import { basename, dirname, relative, resolve, sep } from 'node:path';
 import { applyPlan } from './apply.js';
 import {
   applyWaivers,
+  type ArchiveRequest,
   planArchive,
   type Plan,
   planUnarchive,
@@ -451,6 +452,7 @@ export class BriefEngine {
     let unmeasured: Unmeasured | undefined;
     let dirty: string[] | undefined;
     let pr: PullRequest | undefined;
+    let before: ArchiveRequest['before'];
     if (git !== null) {
       const revision = options.commit ?? (base === undefined ? undefined : 'HEAD');
       if (revision !== undefined) {
@@ -473,7 +475,13 @@ export class BriefEngine {
         // in it: the diff is empty whatever the round changed, and an empty
         // diff would pass every scope check without measuring one.
         if (from === commit.sha) unmeasured = { reason: 'merged', base: base as string, commit: commit.sha };
-        else changes = await git.changes(from, commit.sha);
+        else {
+          changes = await git.changes(from, commit.sha);
+          // The brief as the round found it, where the changes are measured
+          // from: the merge base, or the commit's parent, as `changes` reads it.
+          const revision = from ?? `${commit.sha}^`;
+          if (git.fileAt !== undefined) before = { revision, text: await git.fileAt(revision, brief.file) };
+        }
       }
       // With neither a commit nor a base, nothing was read, and the planner
       // says so itself of a request that brings no changes and no reason.
@@ -496,15 +504,19 @@ export class BriefEngine {
       strict: options.strict,
       findings,
       documents,
+      before,
+      repoFiles: before === undefined ? undefined : await this.repoFiles(),
     });
     return this.waive(plan, base ?? null, commit?.sha ?? null, options.strict === true);
   }
 
   /**
-   * Asks each plugin with a `waive` hook which of a plan's refusals its own
-   * check lifts, and turns those into notes. Asked only when the plan has a
-   * refusal a plugin may lift: a hook may read git and verify signatures, and a
-   * plan with nothing to waive has no question for it. A hook that throws, or
+   * Asks each plugin with a `waive` hook which of a plan's refusals, and of
+   * its warnings a plugin may lift, its own check lifts, and turns those into
+   * notes. Asked only when the plan has one: a hook may read git and verify
+   * signatures, and a plan with nothing to waive has no question for it. The
+   * refusals are handed as `findings`, as they always were, and the warnings
+   * apart, so a hook that reads `findings` still reads refusals alone. A hook that throws, or
    * answers in the wrong shape, stops the run as a plugin that fails to load
    * does: an archival decided without the check it asked for is not one to
    * trust.
@@ -516,11 +528,13 @@ export class BriefEngine {
    * which stops the run like any failing hook.
    */
   private async waive(plan: Plan, base: string | null, commit: string | null, strict: boolean): Promise<Plan> {
-    if (!plan.blocking.some((f) => WAIVABLE.includes(f.rule))) return plan;
+    const warnings = plan.warnings.filter((f) => f.rule === 'scope-changed');
+    if (warnings.length === 0 && !plan.blocking.some((f) => WAIVABLE.includes(f.rule))) return plan;
     const context = frozenCopy({
       root: this.root,
       brief: { id: plan.brief.id, file: plan.brief.file, text: plan.brief.text },
       findings: plan.blocking,
+      warnings,
       base,
       commit,
     });
