@@ -37,6 +37,7 @@ What `lint`, `matrix`, `schedule` and `archive` report, by rule, with the severi
 | `collision` | error | Two briefs in one wave whose scopes can name the same file (`matrix`). |
 | `collision-undecided` | warning | Two briefs in one wave whose collision the search could not decide within its budget and no file of the tree proves (`matrix`), or a wave `schedule` passed over for it. |
 | `unscoped` | note | A brief sharing a wave that declares no scope, or none that can be read, which it is told with the patterns (`matrix`), or one `schedule` runs alone. |
+| `writes-protected` | warning | A brief in a wave that may write a file another brief of the wave protects, outside its own protections (`matrix`), on the writer, with each pair of patterns and the file named. |
 | `shared-directory` | off | Two briefs in one wave writing into the same directory (`matrix`). |
 | `wave-schedule` | error | A brief with no wave, or a declared wave that does not hold - a collision in it, a dependency out of order - with the wave `schedule` computes and why (`schedule`). A declared wave that holds and is not the computed one is a note. |
 | `scope-changed` | warning | A pattern the round dropped from its own brief's `protectedFiles`, or added to its `affectedFiles`, since the merge base, with the files it let through (`archive`). Only the scope fields are compared, by what they cover. An error from round 30. |

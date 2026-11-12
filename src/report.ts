@@ -360,6 +360,7 @@ export function prettyMatrix(report: CollisionReport, style: Style): string {
     const hits = pairs(wave.collisions);
     const unknown = pairs(wave.undecided);
     const near = pairs(wave.shared);
+    const reach = pairs(wave.intrusions.map((i) => ({ a: i.writer, b: i.owner })));
     out.push(`  ${' '.repeat(width)}  ${names.map((n) => padStart(n, width)).join('  ')}`);
     for (const [row, name] of names.entries()) {
       const cells = names.map((_, col) => {
@@ -368,9 +369,11 @@ export function prettyMatrix(report: CollisionReport, style: Style): string {
           ? paint(style, 'red', 'X')
           : unknown.has(key)
             ? paint(style, 'yellow', '?')
-            : near.has(key)
-              ? paint(style, 'yellow', '~')
-              : '\u00b7';
+            : reach.has(key)
+              ? paint(style, 'yellow', '!')
+              : near.has(key)
+                ? paint(style, 'yellow', '~')
+                : '\u00b7';
         return `${' '.repeat(width - 1)}${mark}`;
       });
       out.push(`  ${padEnd(name, width)}  ${cells.join('  ')}`);
@@ -385,6 +388,13 @@ export function prettyMatrix(report: CollisionReport, style: Style): string {
       u.patterns.forEach(([x, y], i) => {
         out.push(`  ${i === 0 ? paint(style, 'yellow', '?') : ' '} ${label(u.a)} "${x}" and ${label(u.b)} "${y}": undecided within the search's budget`);
       });
+    }
+    for (const i of wave.intrusions) {
+      const lines = [
+        ...i.overlaps.map((o) => `${label(i.writer)} "${o.patterns[0]}" reaches what ${label(i.owner)} protects, "${o.patterns[1]}", at ${witnessText(o)}`),
+        ...i.undecided.map(([x, y]) => `${label(i.writer)} "${x}" and what ${label(i.owner)} protects, "${y}": undecided within the search's budget`),
+      ];
+      lines.forEach((line, n) => out.push(`  ${n === 0 ? paint(style, 'yellow', '!') : ' '} ${line}`));
     }
     for (const s of wave.shared) {
       out.push(`  ${paint(style, 'yellow', '~')} ${label(s.a)} and ${label(s.b)} both write into ${inWords(s.directories.map((d) => `${d}/`))}`);
@@ -432,6 +442,7 @@ export function matrixJson(report: CollisionReport): Record<string, unknown> {
       undecided: w.undecided.map((u) => ({ a: u.a.id, b: u.b.id, patterns: u.patterns })),
       sharedDirectories: w.shared.map((s) => ({ a: s.a.id, b: s.b.id, directories: s.directories })),
       unscoped: w.unscoped.map((b) => b.id),
+      protectedWrites: w.intrusions.map((i) => ({ writer: i.writer.id, owner: i.owner.id, overlaps: i.overlaps.map(overlapJson), undecided: i.undecided })),
     })),
     unscheduled: report.unscheduled.map((b) => b.id),
     deferred: report.deferred.map((b) => b.id),

@@ -227,6 +227,37 @@ export function apart(x: Glob, y: Glob): boolean {
 }
 
 /**
+ * Where one scope writes what another protects: each pair of a pattern the
+ * writer may write and a pattern the owner protects that some file lies in,
+ * outside the writer's own protections, which it does not write. Run in one
+ * wave, the writer changes what the other round was promised would hold. The
+ * witness is found as {@link meet} finds one: a file of the tree, or the
+ * search's shortest path as an example, and a pair the search cannot decide
+ * is said to be undecided.
+ *
+ * A pair the two patterns alone prove apart is not searched with the
+ * writer's protections, which cannot bring the two together.
+ */
+export function reaches(writer: Scope, owner: Scope, budget: number = WITNESS_BUDGET, files: readonly string[] | null = null): Meeting {
+  const avoid = writer.protected.map((p) => p.glob);
+  const overlaps: Overlap[] = [];
+  const undecided: (readonly [string, string])[] = [];
+  for (const x of writer.affected) {
+    for (const y of owner.protected) {
+      if (globWitness([x.glob, y.glob], [], budget).kind === 'none') continue;
+      const witness = globWitness([x.glob, y.glob], avoid, budget);
+      if (witness.kind === 'none') continue;
+      const patterns: readonly [string, string] = [x.pattern, y.pattern];
+      const held = files === null ? undefined : heldInBoth(files, x.glob, y.glob, avoid);
+      if (held !== undefined) overlaps.push({ patterns, witness: held, inTree: true });
+      else if (witness.kind === 'found') overlaps.push({ patterns, witness: witness.path, inTree: files === null ? null : false });
+      else undecided.push(patterns);
+    }
+  }
+  return { overlaps, undecided };
+}
+
+/**
  * A witness as a reader is told it: a file of the tree by its path, and a path
  * the search built with a word that it is an example.
  */

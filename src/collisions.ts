@@ -21,7 +21,7 @@ import { lineOfField } from './brief.js';
 import { type Corpus, waitingOnDeferred, type Waiting } from './corpus.js';
 import { globBases, readingIn, WITNESS_BUDGET } from './glob.js';
 import { configuredSeverity } from './lint.js';
-import { meet, type Overlap, type Scope, scopeOf, witnessText } from './scope.js';
+import { meet, type Overlap, reaches, type Scope, scopeOf, witnessText } from './scope.js';
 import { inWords } from './text.js';
 import type { Finding, Severity } from './types.js';
 
@@ -42,6 +42,16 @@ export interface UndecidedPair {
   readonly patterns: readonly (readonly [string, string])[];
 }
 
+/** A brief of a wave that may write what another of the wave protects. */
+export interface Intrusion {
+  readonly writer: Brief;
+  readonly owner: Brief;
+  /** Each pair of the writer's affected pattern and the owner's protected one that a file lies in, the writer's first. */
+  readonly overlaps: readonly Overlap[];
+  /** The pairs the search could not decide within its budget. One of the two lists is not empty. */
+  readonly undecided: readonly (readonly [string, string])[];
+}
+
 export interface SharedDirectory {
   readonly a: Brief;
   readonly b: Brief;
@@ -57,6 +67,8 @@ export interface WaveMatrix {
   readonly undecided: readonly UndecidedPair[];
   readonly shared: readonly SharedDirectory[];
   readonly unscoped: readonly Brief[];
+  /** Briefs that may write what another of the wave protects, each way round. */
+  readonly intrusions: readonly Intrusion[];
 }
 
 export interface CollisionReport {
@@ -86,12 +98,24 @@ function matrix(wave: number | null, briefs: readonly Brief[], scopes: ReadonlyM
   const collisions: Collision[] = [];
   const undecided: UndecidedPair[] = [];
   const shared: SharedDirectory[] = [];
+  const intrusions: Intrusion[] = [];
   const scoped = briefs.map((brief) => scopes.get(brief) as Scope);
   // One past the end there is no later brief to pair with, so the bound could be one further.
   for (let i = 0; i < scoped.length; i += 1) {
     for (let j = i + 1; j < scoped.length; j += 1) {
       const left = scoped[i] as Scope;
       const right = scoped[j] as Scope;
+      // Whatever else the pair does, one may change what the other was
+      // promised would hold, either way round.
+      for (const [writer, owner] of [
+        [left, right],
+        [right, left],
+      ] satisfies [Scope, Scope][]) {
+        const reached = reaches(writer, owner, budget, files);
+        if (reached.overlaps.length > 0 || reached.undecided.length > 0) {
+          intrusions.push({ writer: writer.brief, owner: owner.brief, overlaps: reached.overlaps, undecided: reached.undecided });
+        }
+      }
       const meeting = meet(left, right, budget, files);
       if (meeting.overlaps.length > 0) {
         collisions.push({ a: left.brief, b: right.brief, overlaps: meeting.overlaps });
@@ -107,7 +131,7 @@ function matrix(wave: number | null, briefs: readonly Brief[], scopes: ReadonlyM
     }
   }
   const unscoped = briefs.length > 1 ? scoped.filter((s) => s.affected.length === 0).map((s) => s.brief) : [];
-  return { wave, briefs, collisions, undecided, shared, unscoped };
+  return { wave, briefs, collisions, undecided, shared, unscoped, intrusions };
 }
 
 export function collisions(corpus: Corpus, options: CollisionOptions = {}): CollisionReport {
@@ -178,6 +202,7 @@ export function reported(corpus: Corpus, report: CollisionReport): CollisionRepo
     undecided: on('collision-undecided') ? wave.undecided : [],
     shared: on('shared-directory') ? wave.shared : [],
     unscoped: on('unscoped') ? wave.unscoped : [],
+    intrusions: on('writes-protected') ? wave.intrusions : [],
   }));
   return { ...report, waves };
 }
@@ -217,9 +242,34 @@ export function collisionFindings(corpus: Corpus, report: CollisionReport): Find
         subject: label(s.a),
       });
     }
+    for (const i of wave.intrusions) findings.push(intrusionFinding(severity('writes-protected'), i, wave.wave));
     for (const brief of wave.unscoped) findings.push(unscopedFinding(severity('unscoped'), brief, `the ${wave.briefs.length - 1} other brief(s) ${where(wave.wave)}`));
   }
   return findings;
+}
+
+/**
+ * A brief that may write what another of its wave protects, as one finding on
+ * the writer, which is the one to narrow or to move.
+ */
+function intrusionFinding(severity: Severity, i: Intrusion, wave: number | null): Finding {
+  const owner = label(i.owner);
+  const each = i.overlaps.map((o) => `"${o.patterns[0]}" reaches "${o.patterns[1]}" at ${witnessText(o)}`);
+  const undecided = i.undecided.map(([x, y]) => `"${x}" and "${y}"`);
+  const message =
+    i.overlaps.length === 0
+      ? `whether it writes what ${owner} protects ${where(wave)} is undecided: the search met its budget for ${inWords(undecided)}`
+      : `may write what ${owner} protects ${where(wave)}: ${each.join('; ')}${undecided.length === 0 ? '' : `, and is undecided for ${inWords(undecided)}`}`;
+  return {
+    rule: 'writes-protected',
+    severity,
+    message,
+    file: i.writer.file,
+    line: lineOfField(i.writer, 'affectedFiles') + 1,
+    brief: i.writer.id ?? undefined,
+    hint: `run them in different waves, make one depend on the other, or narrow affectedFiles to leave what ${owner} protects alone`,
+    subject: owner,
+  };
 }
 
 /**

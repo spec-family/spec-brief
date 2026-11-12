@@ -12,6 +12,7 @@ import {
   githubCommands,
   gitlabCodeQuality,
   jsonDocument,
+  matrixJson,
   paint,
   planJson,
   prettyFindings,
@@ -387,6 +388,53 @@ describe('lists, matrices and plans', () => {
       ['001 \u2014 x', null, '001 \u2014 x'],
     ];
     for (const [title, id, shown] of cases) expect(titleWithoutId(title, id), `${title} in ${String(id)}`).toBe(shown);
+  });
+
+  it('marks a pair where one may write what the other protects, and lists each pattern beneath, as JSON lists them', () => {
+    const guarded = corpusOf({
+      'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[src/domain/refund.ts, src/api/**]' }),
+      'briefs/002_b.md': goodBrief({ wave: '1', affectedFiles: '[lib/**]', protectedFiles: '[src/domain/**, src/api/schema.ts]' }),
+      'briefs/003_c.md': goodBrief({ wave: '1', affectedFiles: '[docs/**]' }),
+    });
+    const report = collisions(guarded, { repoFiles: ['src/api/schema.ts'] });
+    expect(prettyMatrix(report, { color: true }).split('\n').slice(0, 7)).toEqual([
+      `${String.fromCharCode(27)}[1mwave 1 · 3 briefs${String.fromCharCode(27)}[22m`,
+      '       001  002  003',
+      `  001    ·    ${String.fromCharCode(27)}[33m!${String.fromCharCode(27)}[39m    ·`,
+      `  002    ${String.fromCharCode(27)}[33m!${String.fromCharCode(27)}[39m    ·    ·`,
+      '  003    ·    ·    ·',
+      `  ${String.fromCharCode(27)}[33m!${String.fromCharCode(27)}[39m 001 "src/domain/refund.ts" reaches what 002 protects, "src/domain/**", at src/domain/refund.ts, an example not in the tree`,
+      '    001 "src/api/**" reaches what 002 protects, "src/api/schema.ts", at src/api/schema.ts',
+    ]);
+    expect(matrixJson(report)['waves']).toEqual([
+      expect.objectContaining({
+        protectedWrites: [
+          {
+            writer: '001',
+            owner: '002',
+            overlaps: [
+              { patterns: ['src/domain/refund.ts', 'src/domain/**'], witness: 'src/domain/refund.ts', inTree: false },
+              { patterns: ['src/api/**', 'src/api/schema.ts'], witness: 'src/api/schema.ts', inTree: true },
+            ],
+            undecided: [],
+          },
+        ],
+      }),
+    ]);
+    // Given one state, the search decides no pair, and each is told as undecided.
+    const hurried = prettyMatrix(collisions(guarded, { budget: 1 }), plainStyle).split('\n');
+    expect(hurried.filter((line) => line.includes('protects'))).toEqual([
+      '  ! 001 "src/domain/refund.ts" and what 002 protects, "src/domain/**": undecided within the search\'s budget',
+      '    001 "src/domain/refund.ts" and what 002 protects, "src/api/schema.ts": undecided within the search\'s budget',
+      '    001 "src/api/**" and what 002 protects, "src/domain/**": undecided within the search\'s budget',
+      '    001 "src/api/**" and what 002 protects, "src/api/schema.ts": undecided within the search\'s budget',
+    ]);
+    // A collision outranks the mark.
+    const both = corpusOf({
+      'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[src/**]' }),
+      'briefs/002_b.md': goodBrief({ wave: '1', affectedFiles: '[src/a.ts]', protectedFiles: '[src/b.ts]' }),
+    });
+    expect(prettyMatrix(collisions(both), plainStyle).split('\n').slice(2, 4)).toEqual(['  001    ·    X', '  002    X    ·']);
   });
 
   it('draws a matrix with collisions, shared directories and unscoped briefs', () => {

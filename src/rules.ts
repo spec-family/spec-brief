@@ -978,6 +978,7 @@ export const COLLISION_RULES: readonly RuleInfo[] = [
     description: 'Whether two briefs in one wave can write the same file is decided within the search budget.',
   },
   { id: 'unscoped', severity: 'note', description: 'A brief sharing a wave declares the files it writes.' },
+  { id: 'writes-protected', severity: 'warning', description: 'A brief in a wave does not write what another brief of the wave protects.' },
   { id: 'shared-directory', severity: 'off', description: 'Briefs in one wave do not write into the same directory.' },
   {
     id: 'wave-schedule',
