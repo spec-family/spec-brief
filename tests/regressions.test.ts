@@ -465,6 +465,7 @@ describe('collisions, after 0.1.0', () => {
           ],
           undecided: [],
           sharedDirectories: [],
+          protectedWrites: [],
           unscoped: [],
         },
       ],
@@ -533,7 +534,7 @@ describe('collisions, after 0.1.0', () => {
     expect(prettyMatrix(report, { color: false })).toContain('  ~ 001 and 002 both write into x/, y/ and z/');
     const unscoped = collisions(corpusOf({ [A]: goodBrief({ wave: '1', affectedFiles: '[x/1.ts]' }), [B]: goodBrief({ wave: '1', affectedFiles: '[x/2.ts]' }), 'briefs/003_c.md': goodBrief({ wave: '1' }) }));
     expect(matrixJson(unscoped)).toEqual({
-      waves: [{ wave: 1, briefs: ['001', '002', '003'], collisions: [], undecided: [], sharedDirectories: [{ a: '001', b: '002', directories: ['x'] }], unscoped: ['003'] }],
+      waves: [{ wave: 1, briefs: ['001', '002', '003'], collisions: [], undecided: [], sharedDirectories: [{ a: '001', b: '002', directories: ['x'] }], unscoped: ['003'], protectedWrites: [] }],
       unscheduled: [],
       deferred: [],
       waiting: [],

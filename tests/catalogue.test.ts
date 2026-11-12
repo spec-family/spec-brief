@@ -62,6 +62,7 @@ describe('the rule catalogue', () => {
       collision: 'error',
       'collision-undecided': 'warning',
       unscoped: 'note',
+      'writes-protected': 'warning',
       'shared-directory': 'off',
       'wave-schedule': 'error',
       'scope-changed': 'warning',

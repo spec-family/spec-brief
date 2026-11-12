@@ -503,6 +503,7 @@ describe('collisions', () => {
         collisions: [],
         undecided: [{ a: '001', b: '002', patterns: [['src/**', '**/*.ts'], ['src/**', '**/*.md']] }],
         sharedDirectories: [],
+        protectedWrites: [],
         unscoped: [],
       },
     ]);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { type Corpus, dependencyCycles, findBriefs, idKey, isReady, pendingDependencies, resolveDependency, waitingOnDeferred } from '../src/corpus.js';
-import { collisionFindings, collisions } from '../src/collisions.js';
+import { collisionFindings, collisions, reported } from '../src/collisions.js';
 import { config, corpusOf, goodBrief } from './helpers.js';
 import { fastestInTurn, instrumented } from './timing.js';
 
@@ -177,6 +177,83 @@ describe('the collision matrix', () => {
     expect(wave1.unscoped.map((b) => b.id)).toEqual(['004']);
     expect(report.waves[1]?.unscoped).toEqual([]);
     expect(report.unscheduled.map((b) => b.id)).toEqual(['006']);
+  });
+
+  it('warns of a brief that may write what another brief of its wave protects, on the writer, either way round', () => {
+    const corpus = corpusOf({
+      'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[src/domain/refund.ts, src/api/**]' }),
+      'briefs/002_b.md': goodBrief({ wave: '1', affectedFiles: '[lib/**]', protectedFiles: '[src/domain/**, src/api/schema.ts]' }),
+      'briefs/003_c.md': goodBrief({ wave: '1', affectedFiles: '[docs/**]', protectedFiles: '[lib/x.ts]' }),
+      // Another wave writes the same and is not asked.
+      'briefs/004_d.md': goodBrief({ wave: '2', affectedFiles: '[src/domain/**]' }),
+    });
+    const report = collisions(corpus, { repoFiles: ['src/api/schema.ts', 'lib/x.ts'] });
+    expect(report.waves[0]?.intrusions.map((i) => [i.writer.id, i.owner.id, i.overlaps, i.undecided])).toEqual([
+      [
+        '001',
+        '002',
+        [
+          { patterns: ['src/domain/refund.ts', 'src/domain/**'], witness: 'src/domain/refund.ts', inTree: false },
+          { patterns: ['src/api/**', 'src/api/schema.ts'], witness: 'src/api/schema.ts', inTree: true },
+        ],
+        [],
+      ],
+      ['002', '003', [{ patterns: ['lib/**', 'lib/x.ts'], witness: 'lib/x.ts', inTree: true }], []],
+    ]);
+    expect(report.waves[1]?.intrusions).toEqual([]);
+    const found = collisionFindings(corpus, report).filter((f) => f.rule === 'writes-protected');
+    expect(found.map((f) => [f.severity, f.file, f.line, f.brief, f.subject, f.message, f.hint])).toEqual([
+      [
+        'warning',
+        'briefs/001_a.md',
+        4,
+        '001',
+        '002',
+        'may write what 002 protects in wave 1: "src/domain/refund.ts" reaches "src/domain/**" at src/domain/refund.ts, an example not in the tree; "src/api/**" reaches "src/api/schema.ts" at src/api/schema.ts',
+        'run them in different waves, make one depend on the other, or narrow affectedFiles to leave what 002 protects alone',
+      ],
+      [
+        'warning',
+        'briefs/002_b.md',
+        4,
+        '002',
+        '003',
+        'may write what 003 protects in wave 1: "lib/**" reaches "lib/x.ts" at lib/x.ts',
+        'run them in different waves, make one depend on the other, or narrow affectedFiles to leave what 003 protects alone',
+      ],
+    ]);
+    // Off, it is not reported, and the report told leaves it out.
+    const off = corpusOf(Object.fromEntries(corpus.briefs.map((b) => [b.file, b.source])), config({ rules: { 'writes-protected': 'off' } }));
+    expect(collisionFindings(off, collisions(off)).filter((f) => f.rule === 'writes-protected')).toEqual([]);
+    expect(reported(off, collisions(off)).waves[0]?.intrusions).toEqual([]);
+  });
+
+  it('does not warn of a file the writer itself protects, nor of a protection nothing it writes can reach', () => {
+    const corpus = corpusOf({
+      'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '[src/**]', protectedFiles: '[src/db/**]' }),
+      'briefs/002_b.md': goodBrief({ wave: '1', affectedFiles: '[lib/**]', protectedFiles: '[src/db/schema.ts, docs/**]' }),
+    });
+    expect(collisions(corpus).waves[0]?.intrusions).toEqual([]);
+  });
+
+  it('says a pair it could not decide is undecided, beside what it did decide', () => {
+    const corpus = corpusOf({
+      'briefs/001_a.md': goodBrief({ wave: '1', affectedFiles: '["src/*/a/**"]' }),
+      'briefs/002_b.md': goodBrief({ wave: '1', affectedFiles: '[lib/**]', protectedFiles: '["src/x*/**"]' }),
+    });
+    const hurried = collisions(corpus, { budget: 1 });
+    expect(hurried.waves[0]?.intrusions.map((i) => [i.overlaps, i.undecided])).toEqual([[[], [['src/*/a/**', 'src/x*/**']]]]);
+    expect(collisionFindings(corpus, hurried).map((f) => f.message)).toEqual([
+      'whether it writes what 002 protects in wave 1 is undecided: the search met its budget for "src/*/a/**" and "src/x*/**"',
+    ]);
+    // Given its budget, the search decides it: the two meet, at a path it built, with no tree to ask.
+    expect(collisions(corpus).waves[0]?.intrusions.map((i) => [i.overlaps.map((o) => o.inTree), i.undecided])).toEqual([[[null], []]]);
+    // A pair decided and one not, told in one finding.
+    const wave = hurried.waves[0]!;
+    const both = { ...wave, intrusions: [{ ...wave.intrusions[0]!, overlaps: [{ patterns: ['src/b.ts', 'src/b.ts'] as const, witness: 'src/b.ts', inTree: null }] }] };
+    expect(collisionFindings(corpus, { ...hurried, waves: [both] }).map((f) => f.message)).toEqual([
+      'may write what 002 protects in wave 1: "src/b.ts" reaches "src/b.ts" at src/b.ts, and is undecided for "src/*/a/**" and "src/x*/**"',
+    ]);
   });
 
   it('skips patterns that do not parse', () => {

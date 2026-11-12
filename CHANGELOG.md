@@ -66,7 +66,16 @@ what a run reports.
   a comma outside braces, a list written as one value. Either protected
   nothing in `protectedFiles` with only a `glob-matches-nothing` note,
   which this replaces for such a pattern.
-  29 lint rules and 5 collision rules.
+- **`writes-protected`**, a `matrix` warning: a brief in a wave whose
+  `affectedFiles` reach a file another brief of the wave protects, outside
+  its own `protectedFiles`. Brief 001 writing `src/domain/refund.ts` beside
+  002, which protects `src/domain/**`, was not reported: the two do not
+  collide, since 002 does not write the file, and 001 changed what 002 was
+  promised would hold. One finding per pair, on the writer, naming each pair
+  of patterns and the file, as a collision does; the grid marks it `!`, and
+  `--format json` lists `protectedWrites` in each wave. A pair the search
+  cannot decide within its budget is said to be undecided.
+  29 lint rules and 6 collision rules.
 
 ### Fixed
 
