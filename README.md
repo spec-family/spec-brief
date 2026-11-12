@@ -113,7 +113,7 @@ Every privilege change issues a new session token and invalidates the old one.
 | The sections | `missing-section`, `duplicate-section`, `empty-section`, `placeholder`, `missing-checklist`, `must-contain`, `section-order` |
 | Dependencies and deferred work | `dependency`, `dependency-cycle`, `wave-order`, `deferral-trigger` |
 | Claims raised and rows awaited | `raises`, `awaits` |
-| Scopes | `glob`, `scope-contradiction`, `glob-matches-nothing`, `literal-read-as-file` |
+| Scopes | `glob`, `scope-contradiction`, `empty-scope`, `glob-mistyped`, `glob-matches-nothing`, `literal-read-as-file` |
 | Briefs side by side (`matrix`, `schedule`) | `collision`, `collision-undecided`, `unscoped`, `shared-directory`, `wave-schedule` |
 | Archived briefs and archival | `archive-freeze`, `scope-changed`, `scope-unmeasured`, `stale-link` |
 

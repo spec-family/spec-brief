@@ -808,6 +808,91 @@ describe('scopes', () => {
     expect(braced.map((f) => `${f.rule}: ${f.message}`)).toEqual(['glob-matches-nothing: "{src/newmod/,docs/new.md}" in affectedFiles matches no file in the tree']);
   });
 
+  it('warns of an active brief whose affectedFiles is written and empty, and of no other', async () => {
+    const found = await findings({ [A]: goodBrief({ affectedFiles: '[]', protectedFiles: '[src/db/**]' }) });
+    expect(found.map((f) => [f.rule, f.severity, f.line, f.message, f.hint])).toEqual([
+      [
+        'empty-scope',
+        'warning',
+        3,
+        'names no affectedFiles, so nothing bounds what its round writes, and no check can place it beside another brief',
+        'list the files the round writes, as globs from the repository root: affectedFiles: [src/auth/**]',
+      ],
+    ]);
+    expect(await rulesHit({ [A]: goodBrief({ affectedFiles: '' }) })).toEqual(['empty-scope@3']);
+    // A scope written, a field never written, a draft, a deferred brief, an archived one: nothing to say.
+    expect(await findings({ [A]: goodBrief({ affectedFiles: '[src/a.ts]' }) })).toEqual([]);
+    expect(await findings({ [A]: goodBrief() })).toEqual([]);
+    expect(await findings({ [A]: goodBrief({ status: 'draft', affectedFiles: '[]' }) })).toEqual([]);
+    expect(await rulesHit({ [A]: goodBrief({ status: 'deferred', affectedFiles: '[]', trigger: 'when the second tenant signs' }) })).toEqual([]);
+    expect(await findings({ 'briefs/archive/001_a.md': goodBrief({ status: 'archived', affectedFiles: '[]' }) })).toEqual([]);
+    // A list that could not be read is the field rule's, once.
+    expect(await rulesHit({ [A]: goodBrief({ affectedFiles: '[a' }) })).toEqual(['field@3']);
+  });
+
+  it('warns of a pattern that matches nothing but would with its case ignored, or is a list written as one value', async () => {
+    const tree = ['src/loans.js', 'src/Api/Handler.ts', 'docs/x.md'];
+    const said = async (front: Record<string, string>): Promise<string[]> =>
+      (await findings({ [A]: goodBrief(front) }, config(), tree)).map((f) => `${f.rule}@${f.line} ${f.severity}: ${f.message} | ${f.hint ?? ''}`);
+    expect(await said({ affectedFiles: '[docs/x.md]', protectedFiles: '[src/Loans.js]' })).toEqual([
+      'glob-mistyped@4 warning: "src/Loans.js" in protectedFiles matches no file in the tree, and with its case ignored matches src/loans.js | write it as the tree spells it: git, Linux and every check compare paths by case, so as written it protects nothing',
+    ]);
+    expect(await said({ affectedFiles: '[src/api/**]' })).toEqual([
+      'glob-mistyped@3 warning: "src/api/**" in affectedFiles matches no file in the tree, and with its case ignored matches src/Api/Handler.ts | write it as the tree spells it: git, Linux and every check compare paths by case, so as written it puts nothing in the scope',
+    ]);
+    expect(await said({ affectedFiles: '[docs/x.md]', protectedFiles: "'src/loans.js, docs/x.md'" })).toEqual([
+      'glob-mistyped@4 warning: "src/loans.js, docs/x.md" in protectedFiles is one pattern with a comma in it, and matches no file in the tree | write a list, one pattern to an item: protectedFiles: [src/loans.js, docs/x.md]; as written it protects nothing',
+    ]);
+    // A comma inside braces is the glob's own; a pattern that matches as written is never mistyped.
+    expect(await said({ affectedFiles: '["{src,docs}/**"]', protectedFiles: '["docs/{x,y}.md", src/loans.js]' })).toEqual([]);
+    // Neither, it is a file the round has yet to create, and a note.
+    expect(await said({ affectedFiles: '[docs/x.md, src/new.ts]' })).toEqual([
+      'glob-matches-nothing@3 note: "src/new.ts" in affectedFiles matches no file in the tree | expected when the round creates it; otherwise check the spelling',
+    ]);
+    // A directory in another case is mistyped, not a file meant for a directory.
+    expect(await said({ affectedFiles: '[src/api]' })).toEqual([
+      'glob-mistyped@3 warning: "src/api" in affectedFiles matches no file in the tree, and with its case ignored matches src/Api/Handler.ts | write it as the tree spells it: git, Linux and every check compare paths by case, so as written it puts nothing in the scope',
+    ]);
+    // Without a tree nothing is known to be missing from it.
+    expect(await findings({ [A]: goodBrief({ protectedFiles: '[src/Loans.js]' }) })).toEqual([]);
+  });
+
+  it('splits a list written as one value at the commas outside braces, and keeps a brace\'s own', async () => {
+    const tree = ['docs/x.md'];
+    const hints = async (pattern: string): Promise<(string | undefined)[]> =>
+      (await findings({ [A]: goodBrief({ affectedFiles: '[docs/x.md]', protectedFiles: JSON.stringify([pattern]) }) }, config(), tree))
+        .filter((f) => f.rule === 'glob-mistyped')
+        .map((f) => f.hint);
+    expect(await hints('src/{a,b}.ts, lib/c.ts')).toEqual(['write a list, one pattern to an item: protectedFiles: [src/{a,b}.ts, lib/c.ts]; as written it protects nothing']);
+    expect(await hints('src/a.ts , lib/{c,d}/e.ts')).toEqual(['write a list, one pattern to an item: protectedFiles: [src/a.ts, lib/{c,d}/e.ts]; as written it protects nothing']);
+    // A brace closed in a class is no brace of a group, and does not end one.
+    expect(await hints('src/[}]x.ts, lib/c.ts')).toEqual(['write a list, one pattern to an item: protectedFiles: [src/[}]x.ts, lib/c.ts]; as written it protects nothing']);
+    // Commas only inside braces are the glob's: a pattern that matches nothing yet, and a note.
+    expect(await hints('src/{a,b}.ts')).toEqual([]);
+    const found = await findings({ [A]: goodBrief({ affectedFiles: '[docs/x.md]', protectedFiles: '["src/{a,b}.ts"]' }) }, config(), tree);
+    expect(found.map((f) => [f.rule, f.subject])).toEqual([['glob-matches-nothing', 'protectedFiles: src/{a,b}.ts']]);
+  });
+
+  it('names a mistyped pattern by its field, and leaves alone a pattern whose case cannot be folded', async () => {
+    const found = await findings({ [A]: goodBrief({ affectedFiles: '[docs/x.md]', protectedFiles: '[src/Loans.js]' }) }, config(), ['docs/x.md', 'src/loans.js']);
+    expect(found.map((f) => [f.rule, f.subject])).toEqual([['glob-mistyped', 'protectedFiles: src/Loans.js']]);
+    // Folded, the range runs backwards and is no pattern: nothing matches it either way.
+    const backwards = await findings({ [A]: goodBrief({ affectedFiles: '[docs/x.md]', protectedFiles: '["src/[Z-a]x.ts"]' }) }, config(), ['docs/x.md']);
+    expect(backwards.map((f) => f.rule)).toEqual(['glob-matches-nothing']);
+  });
+
+  it('warns of an empty scope whatever else a field of the brief holds that cannot be read', async () => {
+    expect(await rulesHit({ [A]: goodBrief({ affectedFiles: '[]', wave: 'two' }) })).toEqual(['empty-scope@3', 'field@4']);
+  });
+
+  it('names three files a mistyped pattern matches, and counts the rest', async () => {
+    const tree = ['A/1.ts', 'A/2.ts', 'A/3.ts', 'A/4.ts', 'A/5.ts'];
+    const found = await findings({ [A]: goodBrief({ affectedFiles: '[a/**]' }) }, config(), tree);
+    expect(found.map((f) => f.message)).toEqual(['"a/**" in affectedFiles matches no file in the tree, and with its case ignored matches A/1.ts, A/2.ts and A/3.ts and 2 more']);
+    const three = await findings({ [A]: goodBrief({ affectedFiles: '[a/**]' }) }, config(), tree.slice(0, 3));
+    expect(three.map((f) => f.message)).toEqual(['"a/**" in affectedFiles matches no file in the tree, and with its case ignored matches A/1.ts, A/2.ts and A/3.ts']);
+  });
+
   it('notes a pattern that matches no file in the tree, only when files are known', async () => {
     const files = { [A]: goodBrief({ affectedFiles: '[src/new/**, src/a.ts]', protectedFiles: '[gone.ts]' }) };
     expect(await findings(files)).toEqual([]);

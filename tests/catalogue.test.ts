@@ -54,6 +54,8 @@ describe('the rule catalogue', () => {
       awaits: 'error',
       glob: 'error',
       'scope-contradiction': 'error',
+      'empty-scope': 'warning',
+      'glob-mistyped': 'warning',
       'glob-matches-nothing': 'note',
       'literal-read-as-file': 'note',
       'archive-freeze': 'error',

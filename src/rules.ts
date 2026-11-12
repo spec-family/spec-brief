@@ -14,7 +14,7 @@ import { type Corpus, cycleSubject, dependencyCycles, duplicateIds, idKey, resol
 import { findEntry, keyName } from './frontmatter.js';
 import { integrityOf } from './integrity.js';
 import { literal } from './literal.js';
-import { type Glob, hasExtension, held, isGlobSyntax, matchesAny, parseGlob, readingIn, treeOf, WITNESS_BUDGET, writtenAlternatives } from './glob.js';
+import { type Glob, hasExtension, held, isGlobSyntax, matchesAny, matchGlob, parseGlob, readingIn, treeOf, WITNESS_BUDGET, writtenAlternatives } from './glob.js';
 import { hasContent, type Section } from './markdown.js';
 import { closest } from './schema.js';
 import { contradictions, patternsOf, scopeOf, type ScopePattern } from './scope.js';
@@ -282,6 +282,53 @@ function directoryAdvice(pattern: string, paths: readonly string[]): string {
     from = end;
   }
   return `write "${slashed}${pattern.slice(from)}" for ${kind}, or ${quoted(entries)} in ${own}`;
+}
+
+/** The parts of a pattern between its commas, outside braces, trimmed; one part where it has no such comma. */
+function commaParts(pattern: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let from = 0;
+  for (const [i, ch] of pattern.split('').entries()) {
+    if (ch === '{') depth += 1;
+    else if (ch === '}' && depth > 0) depth -= 1;
+    else if (ch === ',' && depth === 0) {
+      parts.push(pattern.slice(from, i).trim());
+      from = i + 1;
+    }
+  }
+  return [...parts, pattern.slice(from).trim()];
+}
+
+/** How a scope pattern that matches nothing was probably meant, as `glob-mistyped` reports it. */
+export type Mistyping = { readonly files: readonly string[] } | { readonly parts: readonly string[] };
+
+/**
+ * Whether a pattern that matches no file of the tree was mistyped: it
+ * matches files when case is ignored, as `src/Loans.js` matches
+ * `src/loans.js`, or it holds a comma outside braces, as a list written as
+ * one value does: `protectedFiles: "src/a.ts, src/b.ts"`. Either way it
+ * scopes nothing, and in `protectedFiles` that protects nothing. A pattern
+ * that matches a file is never mistyped: it was written as the tree spells
+ * it, whatever else the tree holds.
+ */
+export function mistyping(pattern: string, glob: Glob, files: readonly string[]): Mistyping | null {
+  if (matchesAny(glob, files)) return null;
+  const lowered = parseGlob(pattern.toLowerCase(), { literal: 'either' });
+  if (lowered.ok) {
+    const matched = files.filter((file) => matchGlob(lowered.glob, file.toLowerCase()));
+    if (matched.length > 0) return { files: matched };
+  }
+  const parts = commaParts(pattern);
+  return parts.length > 1 ? { parts } : null;
+}
+
+/** The patterns of a field that match nothing and were mistyped, each with how. */
+function mistyped(brief: Brief, field: (typeof SCOPE_FIELDS)[number], files: readonly string[]): { readonly pattern: string; readonly how: Mistyping }[] {
+  return patternsOf(brief[field], readingIn(files)).flatMap(({ pattern, glob }) => {
+    const how = mistyping(pattern, glob, files);
+    return how === null ? [] : [{ pattern, how }];
+  });
 }
 
 /**
@@ -803,6 +850,53 @@ export const RULES: readonly Rule[] = [
     check: live(({ brief, repoFiles }) => scopeContradiction(brief, repoFiles)),
   },
   {
+    id: 'empty-scope',
+    severity: 'warning',
+    description: 'An active brief names the files its round writes.',
+    check: live(({ brief }) => {
+      // The field written and left empty, as `new` writes it to be filled: a
+      // repository that writes no scopes at all is not told so on every
+      // brief. A draft or deferred brief is not run yet, and a field that
+      // could not be read is the field rule's finding.
+      if (brief.status !== 'active' || findEntry(brief.frontMatter, 'affectedFiles') === undefined) return [];
+      if (brief.affectedFiles.length > 0 || brief.problems.some((p) => p.field === 'affectedFiles')) return [];
+      return [
+        {
+          line: at(lineOfField(brief, 'affectedFiles')),
+          message: 'names no affectedFiles, so nothing bounds what its round writes, and no check can place it beside another brief',
+          hint: 'list the files the round writes, as globs from the repository root: affectedFiles: [src/auth/**]',
+        },
+      ];
+    }),
+  },
+  {
+    id: 'glob-mistyped',
+    severity: 'warning',
+    description: 'A scope pattern that matches nothing is not one that would match a file with its case ignored, nor a list written as one value.',
+    check: live(({ brief, repoFiles }) => {
+      if (repoFiles === null) return [];
+      return SCOPE_FIELDS.flatMap((field) =>
+        mistyped(brief, field, repoFiles).map(({ pattern, how }) => {
+          const effect = field === 'protectedFiles' ? 'protects nothing' : 'puts nothing in the scope';
+          const common = { line: at(lineOfField(brief, field)), subject: `${field}: ${pattern}` };
+          if ('files' in how) {
+            const shown = inWords(how.files.slice(0, 3)) + (how.files.length > 3 ? ` and ${how.files.length - 3} more` : '');
+            return {
+              ...common,
+              message: `"${pattern}" in ${field} matches no file in the tree, and with its case ignored matches ${shown}`,
+              hint: `write it as the tree spells it: git, Linux and every check compare paths by case, so as written it ${effect}`,
+            };
+          }
+          return {
+            ...common,
+            message: `"${pattern}" in ${field} is one pattern with a comma in it, and matches no file in the tree`,
+            hint: `write a list, one pattern to an item: ${field}: [${how.parts.join(', ')}]; as written it ${effect}`,
+          };
+        }),
+      );
+    }),
+  },
+  {
     id: 'glob-matches-nothing',
     severity: 'note',
     description: 'A scope pattern matches at least one file in the tree.',
@@ -811,8 +905,9 @@ export const RULES: readonly Rule[] = [
       const reading = readingIn(repoFiles);
       return SCOPE_FIELDS.flatMap((field) =>
         patternsOf(brief[field], reading)
-          // A literal the tree does not hold is literal-read-as-file's finding.
-          .filter((p) => unheldLiterals(p.glob, repoFiles).length === 0 && !matchesAny(p.glob, repoFiles))
+          // A literal the tree does not hold is literal-read-as-file's finding,
+          // and a pattern mistyped is glob-mistyped's.
+          .filter((p) => unheldLiterals(p.glob, repoFiles).length === 0 && !matchesAny(p.glob, repoFiles) && mistyping(p.pattern, p.glob, repoFiles) === null)
           .map((p) => ({
             line: at(lineOfField(brief, field)),
             message: `"${p.pattern}" in ${field} matches no file in the tree`,
@@ -832,7 +927,8 @@ export const RULES: readonly Rule[] = [
       return SCOPE_FIELDS.flatMap((field) =>
         patternsOf(brief[field], reading).flatMap(({ pattern, glob }: ScopePattern) => {
           const paths = unheldLiterals(glob, repoFiles);
-          if (paths.length === 0) return [];
+          // A literal the tree holds in another case was mistyped, not meant for a directory.
+          if (paths.length === 0 || mistyping(pattern, glob, repoFiles) !== null) return [];
           const line = at(lineOfField(brief, field));
           const hint = directoryAdvice(pattern, paths);
           const subject = `${field}: ${pattern}`;
