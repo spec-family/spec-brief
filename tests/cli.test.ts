@@ -1124,13 +1124,13 @@ describe('init and new', () => {
   it('scaffolds the scope given, with a glob\'s own commas kept, and refuses a list with a place that names nothing', async () => {
     const root = dir('cli-new-scope');
     await run(root, ['init']);
-    const made = await run(root, ['new', 'Scoped', '--affected', 'src/auth/**, docs/{a,b}.md', '--protected', '**/schema.ts']);
+    const made = await run(root, ['new', 'Scoped', '--affected', 'docs/{a,b}.md , src/auth/**', '--protected', '**/schema.ts']);
     expect(made).toEqual({ code: EXIT_OK, out: 'wrote briefs/001_scoped.md\n', err: '' });
     const text = readFileSync(join(root, 'briefs', '001_scoped.md'), 'utf8');
-    expect(text).toContain('\naffectedFiles: ["src/auth/**", "docs/{a,b}.md"]\nprotectedFiles: ["**/schema.ts"]\n---\n');
+    expect(text).toContain('\naffectedFiles: ["docs/{a,b}.md", "src/auth/**"]\nprotectedFiles: ["**/schema.ts"]\n---\n');
     // As written, the scope reads back as given.
     const listed = JSON.parse((await run(root, ['list', '--format', 'json'])).out) as { briefs: { affectedFiles: string[]; protectedFiles: string[] }[] };
-    expect(listed.briefs.map((b) => [b.affectedFiles, b.protectedFiles])).toEqual([[['src/auth/**', 'docs/{a,b}.md'], ['**/schema.ts']]]);
+    expect(listed.briefs.map((b) => [b.affectedFiles, b.protectedFiles])).toEqual([[['docs/{a,b}.md', 'src/auth/**'], ['**/schema.ts']]]);
     expect(await run(root, ['new', 'x', '--affected', 'src/a,,src/b'])).toEqual({
       code: EXIT_ERROR,
       out: '',

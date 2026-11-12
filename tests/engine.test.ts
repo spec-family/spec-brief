@@ -376,6 +376,21 @@ describe('an engine over memory', () => {
     await expect(other.engine.create({ title: 'x', date: '2026-09-24' })).rejects.toBe(denied);
   });
 
+  it('refuses a scope for a template with no place for it, by either field, and writes no brief', async () => {
+    const fs = new MemoryFileSystem({ 't.md': '---\nprotectedFiles: {protectedFiles}\n---\n\n# {id} {title}\n', 'briefs/.gitkeep': '' });
+    const engine = new BriefEngine({ root: '/virtual', config: resolveConfig({ template: 't.md' }), configFile: null, fs, git: null, plugins: [] });
+    await engine.load();
+    const refused = await engine.create({ title: 'x', date: '2026-09-24', affectedFiles: ['src/**'] }).catch((e: unknown) => e);
+    expect(refused).toBeInstanceOf(EngineError);
+    expect(refused).toMatchObject({
+      code: 'invalid',
+      message: 'the template t.md has no {affectedFiles} for the patterns given; write "affectedFiles: {affectedFiles}" in its front matter',
+    });
+    expect([...fs.files.keys()].filter((path) => path.endsWith('.md') && path !== 't.md')).toEqual([]);
+    const made = await engine.create({ title: 'x', date: '2026-09-24', protectedFiles: ['src/db/**', 'docs/{a,b}.md'] });
+    expect(made.content).toContain('protectedFiles: ["src/db/**", "docs/{a,b}.md"]');
+  });
+
   it('fills a configured template, and refuses a template that is not there', async () => {
     const engine = memoryEngine({ 't.md': '# {id}: {title} ({type}{wave}) {status} {date} {other}\n' }, resolveConfig({ template: 't.md' }));
     await engine.load();
