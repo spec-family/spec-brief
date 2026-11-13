@@ -257,7 +257,25 @@ core, 99.36% over 5,641, mutant for mutant as the sweep of 7ea0af9 (run
 back from `--format github` and whose copy of spec-core moved to 92e46d4,
 the sweep of 8f00fd9 (run 43053437250) read 99.32% over 7,886 and, for the
 core, 99.36% over 5,641: mutant for mutant against the sweep of d7f50e4 (run
-42573723681), no survivor is new and none is gone, in either sweep.
+42573723681), no survivor is new and none is gone, in either sweep. For
+0.15.0, whose `list` says which briefs were not read whole and whose
+`archive`, `lint` and `matrix` gain `scope-changed`, `encoding`,
+`empty-scope`, `glob-mistyped` and `writes-protected`, the sweep of
+2583ae3 (run 43459454586) read 99.34% over 8,697 and, for the core, 99.40%
+over 6,353. Mutant for mutant against the sweep of e5db4f1 (run
+43076653481), which 0.14.0 shipped on, three survivors are new in the full
+sweep and two in the core, and none is gone. Each drops a memo cache, whose
+loss costs only time, and is said so beside the code: `found === undefined`
+made `true` and the `fixedOf.set` of `fixed()` (`src/scope.ts`), in
+either sweep, and the `indexes.set` of the file index (`src/glob.ts`),
+which timed out in the sweep of e5db4f1 and still does in the core, and
+survives the full sweep. Four more had been said to be equivalent and were
+not: the search of the two patterns alone that `meet` and `reaches` run
+before the search with the protections, its `=== 'none'` held `false` and
+its `'none'` emptied. A pair it proves apart within the budget is apart,
+where the search with the protections, longer by them, can meet the budget
+first and leave the pair undecided; spec-brief#98 kills all four with a test
+of that pair.
 
 Reading them was a review again, and found what no test had:
 
