@@ -140,6 +140,9 @@ function indexOf(files: readonly string[]): FileIndex {
     else others.push(position);
   });
   const index = { paths: [...positions.keys()].sort(), positions };
+  // Not kept, the index is built again for each pattern of the run, the same
+  // index in more time: its mutant is equivalent, a timeout in one sweep and
+  // a survivor in the next.
   indexes.set(files, index);
   return index;
 }
