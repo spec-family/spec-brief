@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { type Glob, matchGlob, parseGlob, readingIn } from '../src/glob.js';
-import { apart, contradictions, meet, patternsOf, type Scope, scopeChanges, scopeOf } from '../src/scope.js';
+import { type Glob, globWitness, matchGlob, parseGlob, readingIn } from '../src/glob.js';
+import { apart, contradictions, meet, patternsOf, reaches, type Scope, scopeChanges, scopeOf } from '../src/scope.js';
 import { brief, goodBrief } from './helpers.js';
 
 /**
@@ -81,6 +81,28 @@ describe('two scopes meeting', () => {
     expect(meet(scope(['src/**'], ['src/a.ts']), y, 1, ['src/a.ts'])).toEqual({ overlaps: [], undecided: [['src/**', '**/*.ts']] });
     // A pair the search proves apart stays apart, whatever the tree holds.
     expect(meet(scope(['src/**']), scope(['docs/**']), undefined, ['src/a.ts', 'docs/a.md'])).toEqual({ overlaps: [], undecided: [] });
+  });
+
+  it('call a pair the two patterns alone prove apart apart, never undecided, however long the search with the protections would take', () => {
+    // Directories of two characters and of three share no file, and what each
+    // pattern fixes cannot tell: both lie under src/ and end in .ts.
+    const [x, y, legacy] = ['src/**/v?/*.ts', 'src/**/v??/*.ts', 'src/**/legacy/**'];
+    const g = (source: string): Glob => {
+      const parsed = parseGlob(source);
+      if (!parsed.ok) throw new Error(parsed.error);
+      return parsed.glob;
+    };
+    expect(apart(g(x), g(y))).toBe(false);
+    // Within this budget the two alone are proved apart; with the protection
+    // the search is still going when the budget runs out.
+    const budget = 200;
+    expect(globWitness([g(x), g(y)], [], budget).kind).toBe('none');
+    expect(globWitness([g(x), g(y)], [g(legacy)], budget).kind).toBe('undecided');
+    expect(meet(scope([x], [legacy]), scope([y]), budget)).toEqual({ overlaps: [], undecided: [] });
+    expect(meet(scope([x]), scope([y], [legacy]), budget, ['src/v1/a.ts', 'src/v10/a.ts'])).toEqual({ overlaps: [], undecided: [] });
+    // And so for a writer against what another brief protects.
+    expect(reaches(scope([x], [legacy]), scope([], [y]), budget)).toEqual({ overlaps: [], undecided: [] });
+    expect(reaches(scope([x], [legacy]), scope([], [y]), budget, ['src/v1/a.ts', 'src/v10/a.ts'])).toEqual({ overlaps: [], undecided: [] });
   });
 
   it('agree with brute force over a generated corpus of scopes', () => {

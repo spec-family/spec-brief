@@ -121,8 +121,9 @@ export function meet(a: Scope, b: Scope, budget: number = WITNESS_BUDGET, files:
       // minutes. Asked first by what each pattern fixes, then of the two
       // alone, a pair proved apart costs that; the search with the
       // protections, whose witness is the one named, runs only for the rest.
-      // Without the search of the two alone the answers are those of the
-      // search with the protections, which takes longer to give them.
+      // The search of the two alone is an answer too: a pair it proves apart
+      // within the budget is apart, where the search with the protections,
+      // longer by them, can meet the budget first and leave it undecided.
       if (apart(x.glob, y.glob) || globWitness([x.glob, y.glob], [], budget).kind === 'none') continue;
       const witness = globWitness([x.glob, y.glob], avoid, budget);
       if (witness.kind === 'none') continue;
@@ -245,10 +246,8 @@ export function reaches(writer: Scope, owner: Scope, budget: number = WITNESS_BU
   for (const x of writer.affected) {
     for (const y of owner.protected) {
       // A pair proved apart, by what each pattern fixes or by the two alone,
-      // is apart outside the writer's protections too, as in `meet`. Without
-      // the search of the two alone the answers are those of the search with
-      // the protections, which takes longer to give them: its mutant is
-      // equivalent.
+      // is apart outside the writer's protections too, as in `meet`, and is
+      // never left undecided by a search the protections make longer.
       if (apart(x.glob, y.glob) || globWitness([x.glob, y.glob], [], budget).kind === 'none') continue;
       const witness = globWitness([x.glob, y.glob], avoid, budget);
       if (witness.kind === 'none') continue;
