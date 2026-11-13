@@ -157,7 +157,7 @@ Each gives `npx` the package's [full name](#names) and `--no-install`: a job tha
 
 ## Design
 
-CI's full mutation sweep scores 99.32% over 7,886 mutants on 8f00fd9 (run 43053437250), and a sweep under 97% fails ([ADR-0009](https://github.com/spec-family/spec-brief/blob/main/docs/adr/0009-mutation-testing.md)).
+CI's full mutation sweep scores 99.34% over 8,697 mutants on 2583ae3 (run 43459454586), and a sweep under 97% fails ([ADR-0009](https://github.com/spec-family/spec-brief/blob/main/docs/adr/0009-mutation-testing.md)).
 
 The decisions and what they cost are in [`docs/adr/`](https://github.com/spec-family/spec-brief/blob/main/docs/adr/README.md). Working on spec-brief itself: [CONTRIBUTING.md](https://github.com/spec-family/spec-brief/blob/main/CONTRIBUTING.md); reporting a vulnerability: [SECURITY.md](https://github.com/spec-family/spec-brief/blob/main/SECURITY.md).
 

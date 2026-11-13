@@ -11,7 +11,21 @@ release that can turn a run red. This is the family's policy, recorded in
 releases up to 0.2.7 came before it, and several of their patches changed
 what a run reports.
 
-## Unreleased
+## 0.15.0
+
+A brief that cannot be read whole no longer passes for one that protects
+nothing: each row of `list --format json` carries `problems`, which
+spec-harness reads to hold a write. `archive` reports a round that
+loosened its own brief's scope as `scope-changed`, which a plugin may
+waive by the pattern. `lint` gains `encoding`, `empty-scope` and
+`glob-mistyped`; `matrix` gains `writes-protected`, for a brief that
+writes what another of its wave protects, and takes time that grows with
+the pairs of patterns alone. The configuration takes spec-graph's `warn`
+and `info`, and `--format human` is `pretty`. The new findings are
+warnings, which fail a run only under `--strict`, except `encoding`, an
+error in place of the errors such a brief already had; `scope-changed`
+and `empty-scope` become errors in round 30. No exit code and no JSON
+field changes meaning: `problems` and `protectedWrites` are new.
 
 ### Security
 
